@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * GET /api/users/profile
@@ -34,7 +34,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     const result = await db.query(
       `SELECT id, username, display_name, timezone,

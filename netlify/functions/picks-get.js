@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * GET /api/picks?week={n}&year={y}&leagueId={id}
@@ -46,7 +46,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     const result = await db.query(
       `SELECT p.id, p.user_id, p.game_id, p.league_id,

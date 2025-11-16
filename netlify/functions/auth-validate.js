@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * GET /api/auth/validate
@@ -39,7 +39,7 @@ exports.handler = async (event, context) => {
     }
 
     // Connect to database
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     // Get user data
     const result = await db.query(

@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * GET /api/games/current-week
@@ -13,7 +13,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     // Get the current week based on game times
     const now = new Date();

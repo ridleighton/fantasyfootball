@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * POST /api/picks
@@ -43,7 +43,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     // Process each pick
     const results = [];

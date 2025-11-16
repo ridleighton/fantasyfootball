@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 const bcrypt = require('bcrypt');
 
 /**
@@ -25,7 +25,7 @@ exports.handler = async (event, context) => {
     }
 
     // Connect to database
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     // Find user
     const result = await db.query(

@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * GET /api/picks/compare-week
@@ -42,7 +42,7 @@ exports.handler = async (event, context) => {
     }
 
     // Connect to database
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     // Verify user is a member of the league
     const memberCheck = await db.query(

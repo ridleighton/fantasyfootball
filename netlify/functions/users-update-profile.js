@@ -1,4 +1,4 @@
-const { createClient } = require('@netlify/neon');
+const { createClient } = require('./db');
 
 /**
  * PUT /api/users/profile
@@ -36,7 +36,7 @@ exports.handler = async (event, context) => {
 
     const { displayName, primaryColor, secondaryColor, timezone } = JSON.parse(event.body);
 
-    const db = createClient(process.env.DATABASE_URL);
+    const db = await createClient();
 
     // Build update query dynamically
     const updates = [];

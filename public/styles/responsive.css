@@ -132,6 +132,62 @@
   .admin-table td {
     padding: var(--spacing-sm);
   }
+
+  /* Comparison View Mobile */
+  .comparison-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .overview-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .comparison-filters {
+    flex-direction: column;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-group .form-input {
+    flex: 1;
+  }
+
+  .week-selector {
+    flex-direction: column;
+  }
+
+  .selector-group {
+    width: 100%;
+  }
+
+  .agreement-dots {
+    font-size: 0.65rem;
+  }
+
+  .comparison-card-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pick-comparison {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .status-icon {
+    order: -1;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .game-breakdown-legend {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
 }
 
 /* Touch Device Optimizations */

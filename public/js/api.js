@@ -122,6 +122,10 @@ const API = {
     async getUserPicks(userId, week, leagueId) {
       return API.request(`/picks/user/${userId}?week=${week}&leagueId=${leagueId}`);
     },
+
+    async compareWeek(week, year, leagueId) {
+      return API.request(`/picks/compare-week?week=${week}&year=${year}&leagueId=${leagueId}`);
+    },
   },
 
   // Leaderboard

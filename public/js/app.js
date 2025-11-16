@@ -44,7 +44,7 @@ const App = {
   route() {
     const path = window.location.pathname;
     const hash = window.location.hash.slice(1); // Remove #
-    
+
     // Determine which page to show
     if (path === '/' && !hash) {
       this.showPage('home');
@@ -54,6 +54,8 @@ const App = {
       this.showPage('history');
     } else if (hash === 'profile' || path === '/profile') {
       this.showPage('profile');
+    } else if (hash.startsWith('comparison') || path === '/comparison') {
+      this.showPage('comparison');
     } else if (hash === 'admin' || path === '/admin') {
       if (Auth.isAdmin()) {
         this.showPage('admin');
@@ -88,6 +90,10 @@ const App = {
           break;
         case 'profile':
           await ProfilePage.render(mainContent);
+          break;
+        case 'comparison':
+          await ComparisonPage.init();
+          await ComparisonPage.render(mainContent);
           break;
         case 'admin':
           await AdminPage.render(mainContent);

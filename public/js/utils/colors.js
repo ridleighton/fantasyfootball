@@ -57,13 +57,18 @@ const Colors = {
 
   // Get contrasting text color (black or white) for a background color
   getContrastColor(hexColor) {
+    // Default to primary color if not provided
+    if (!hexColor || typeof hexColor !== 'string') {
+      hexColor = '#8AB4F8';
+    }
+
     const r = parseInt(hexColor.slice(1, 3), 16);
     const g = parseInt(hexColor.slice(3, 5), 16);
     const b = parseInt(hexColor.slice(5, 7), 16);
-    
+
     // Calculate luminance
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    
+
     return luminance > 0.5 ? '#202124' : '#E8EAED';
   },
 
@@ -74,6 +79,11 @@ const Colors = {
 
   // Generate avatar color from user's primary color with opacity
   getAvatarStyle(primaryColor) {
+    // Default to primary color if not provided
+    if (!primaryColor) {
+      primaryColor = '#8AB4F8';
+    }
+
     return {
       backgroundColor: primaryColor,
       color: this.getContrastColor(primaryColor),

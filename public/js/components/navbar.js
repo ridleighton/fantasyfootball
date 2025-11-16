@@ -35,8 +35,8 @@ const Navbar = {
           </div>
           <div class="navbar-actions">
             <a href="#profile" class="navbar-link">
-              <div class="user-avatar-small" style="${Colors.getAvatarStyle(user.primary_color)}">
-                ${user.display_name.charAt(0).toUpperCase()}
+              <div class="user-avatar-small" style="${Colors.getAvatarStyle(user.primaryColor || user.primary_color)}">
+                ${(user.displayName || user.display_name).charAt(0).toUpperCase()}
               </div>
             </a>
             <button class="btn btn-text" id="logout-btn">Logout</button>

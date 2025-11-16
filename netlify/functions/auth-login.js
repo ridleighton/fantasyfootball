@@ -28,6 +28,7 @@ exports.handler = async (event, context) => {
     const db = await createClient();
 
     // Find user
+    console.log('Looking for user:', username);
     const result = await db.query(
       `SELECT id, username, display_name, password_hash, timezone,
               primary_color, secondary_color, is_admin, must_change_password
@@ -36,22 +37,34 @@ exports.handler = async (event, context) => {
       [username]
     );
 
+    console.log('Query result:', result.rows.length, 'rows found');
+
     if (result.rows.length === 0) {
+      console.log('User not found in database');
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid username or password' })
+        body: JSON.stringify({
+          error: 'Invalid username or password',
+          debug: 'User not found'
+        })
       };
     }
 
     const user = result.rows[0];
 
     // Verify password
+    console.log('Verifying password for user:', user.username);
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    console.log('Password match:', passwordMatch);
 
     if (!passwordMatch) {
+      console.log('Password did not match');
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid username or password' })
+        body: JSON.stringify({
+          error: 'Invalid username or password',
+          debug: 'Password mismatch'
+        })
       };
     }
 

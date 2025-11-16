@@ -8,7 +8,8 @@ package-lock.json
 
 # Netlify
 .netlify/
-netlify/
+# Note: netlify/functions/ should be committed for deployment
+# netlify/
 
 # Editor
 .vscode/

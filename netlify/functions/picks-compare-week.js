@@ -1,4 +1,5 @@
 const { createClient } = require('./db');
+const { getUserIdFromToken, unauthorizedResponse } = require('./auth-helper');
 
 /**
  * GET /api/picks/compare-week
@@ -19,13 +20,10 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Get user from context (populated by auth middleware)
-    const userId = context.clientContext?.user?.sub;
+    // Get user ID from auth token
+    const userId = getUserIdFromToken(event);
     if (!userId) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: 'Unauthorized' })
-      };
+      return unauthorizedResponse();
     }
 
     // Parse query parameters

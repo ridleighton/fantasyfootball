@@ -30,7 +30,8 @@ const API = {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Request failed');
+        console.error('API Response Error:', data);
+        throw new Error(data.message || data.error || 'Request failed');
       }
 
       return data;

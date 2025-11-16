@@ -76,6 +76,21 @@
   status = 200
 
 [[redirects]]
+  from = "/api/admin/check-users"
+  to = "/.netlify/functions/admin-check-users"
+  status = 200
+
+[[redirects]]
+  from = "/api/admin/reset-password"
+  to = "/.netlify/functions/admin-reset-password"
+  status = 200
+
+[[redirects]]
+  from = "/api/setup/database"
+  to = "/.netlify/functions/setup-database"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

@@ -6,7 +6,8 @@
 
 const Navbar = {
   state: {
-    activePage: 'home'
+    activePage: 'home',
+    mobileMenuOpen: false
   },
 
   /**
@@ -20,59 +21,77 @@ const Navbar = {
     const isAdmin = Auth.isAdmin();
 
     navContainer.innerHTML = `
-      <!-- Desktop Navbar -->
+      <!-- Navbar -->
       <nav class="navbar">
         <div class="navbar-content">
           <div class="navbar-logo">
             🏈 NFL Pick'ems
           </div>
-          <div class="navbar-links">
+
+          <!-- Desktop Links -->
+          <div class="navbar-links desktop-only">
             <a href="#" class="navbar-link" data-page="home">Home</a>
             <a href="#picks" class="navbar-link" data-page="picks">Picks</a>
             <a href="#history" class="navbar-link" data-page="history">History</a>
             <a href="#comparison" class="navbar-link" data-page="comparison">Compare</a>
             ${isAdmin ? '<a href="#admin" class="navbar-link" data-page="admin">Admin</a>' : ''}
           </div>
+
           <div class="navbar-actions">
-            <a href="#profile" class="navbar-link">
-              <div class="user-avatar-small" style="${Colors.getAvatarStyle(user.primaryColor || user.primary_color)}">
-                ${(user.displayName || user.display_name).charAt(0).toUpperCase()}
-              </div>
-            </a>
-            <button class="btn btn-text" id="logout-btn">Logout</button>
+            <!-- Mobile Hamburger -->
+            <button class="hamburger-btn mobile-only" id="hamburger-btn" aria-label="Toggle menu">
+              <span class="hamburger-line"></span>
+              <span class="hamburger-line"></span>
+              <span class="hamburger-line"></span>
+            </button>
+
+            <!-- Desktop Actions -->
+            <div class="desktop-only" style="display: flex; align-items: center; gap: 1rem;">
+              <a href="#profile" class="navbar-link">
+                <div class="user-avatar-small" style="background-color: ${user.primaryColor || user.primary_color || '#8AB4F8'}; color: ${Colors.getContrastColor(user.primaryColor || user.primary_color || '#8AB4F8')};">
+                  ${(user.displayName || user.display_name).charAt(0).toUpperCase()}
+                </div>
+              </a>
+              <button class="btn btn-text" id="logout-btn">Logout</button>
+            </div>
           </div>
         </div>
-      </nav>
 
-      <!-- Mobile Bottom Nav -->
-      <nav class="bottom-nav">
-        <a href="#" class="bottom-nav-item" data-page="home">
-          <span class="bottom-nav-icon">🏠</span>
-          <span class="bottom-nav-label">Home</span>
-        </a>
-        <a href="#picks" class="bottom-nav-item" data-page="picks">
-          <span class="bottom-nav-icon">✅</span>
-          <span class="bottom-nav-label">Picks</span>
-        </a>
-        <a href="#history" class="bottom-nav-item" data-page="history">
-          <span class="bottom-nav-icon">📊</span>
-          <span class="bottom-nav-label">History</span>
-        </a>
-        <a href="#comparison" class="bottom-nav-item" data-page="comparison">
-          <span class="bottom-nav-icon">🔍</span>
-          <span class="bottom-nav-label">Compare</span>
-        </a>
-        ${isAdmin ? `
-          <a href="#admin" class="bottom-nav-item" data-page="admin">
-            <span class="bottom-nav-icon">⚙️</span>
-            <span class="bottom-nav-label">Admin</span>
-          </a>
-        ` : `
-          <a href="#profile" class="bottom-nav-item" data-page="profile">
-            <span class="bottom-nav-icon">👤</span>
-            <span class="bottom-nav-label">Profile</span>
-          </a>
-        `}
+        <!-- Mobile Menu -->
+        <div class="mobile-menu" id="mobile-menu">
+          <div class="mobile-menu-header">
+            <div class="user-info">
+              <div class="user-avatar-small" style="background-color: ${user.primaryColor || user.primary_color || '#8AB4F8'}; color: ${Colors.getContrastColor(user.primaryColor || user.primary_color || '#8AB4F8')};">
+                ${(user.displayName || user.display_name).charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div class="user-name">${user.displayName || user.display_name}</div>
+                <div class="user-username">@${user.username}</div>
+              </div>
+            </div>
+          </div>
+          <div class="mobile-menu-links">
+            <a href="#" class="mobile-menu-link" data-page="home">
+              <span>🏠</span> Home
+            </a>
+            <a href="#picks" class="mobile-menu-link" data-page="picks">
+              <span>✅</span> Picks
+            </a>
+            <a href="#history" class="mobile-menu-link" data-page="history">
+              <span>📊</span> History
+            </a>
+            <a href="#comparison" class="mobile-menu-link" data-page="comparison">
+              <span>🔍</span> Compare
+            </a>
+            <a href="#profile" class="mobile-menu-link" data-page="profile">
+              <span>👤</span> Profile
+            </a>
+            ${isAdmin ? '<a href="#admin" class="mobile-menu-link" data-page="admin"><span>⚙️</span> Admin</a>' : ''}
+          </div>
+          <div class="mobile-menu-footer">
+            <button class="btn btn-secondary" id="mobile-logout-btn" style="width: 100%;">Logout</button>
+          </div>
+        </div>
       </nav>
     `;
 
@@ -85,8 +104,63 @@ const Navbar = {
       });
     }
 
+    const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+    if (mobileLogoutBtn) {
+      mobileLogoutBtn.addEventListener('click', async () => {
+        await Auth.logout();
+        window.location.href = '/';
+      });
+    }
+
+    // Hamburger menu toggle
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (hamburgerBtn && mobileMenu) {
+      hamburgerBtn.addEventListener('click', () => {
+        this.toggleMobileMenu();
+      });
+
+      // Close menu when clicking on a link
+      document.querySelectorAll('.mobile-menu-link').forEach(link => {
+        link.addEventListener('click', () => {
+          this.closeMobileMenu();
+        });
+      });
+
+      // Close menu when clicking outside
+      document.addEventListener('click', (e) => {
+        if (this.state.mobileMenuOpen &&
+            !mobileMenu.contains(e.target) &&
+            !hamburgerBtn.contains(e.target)) {
+          this.closeMobileMenu();
+        }
+      });
+    }
+
     // Set active page
     this.setActive(this.state.activePage);
+  },
+
+  toggleMobileMenu() {
+    this.state.mobileMenuOpen = !this.state.mobileMenuOpen;
+    const mobileMenu = document.getElementById('mobile-menu');
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+
+    if (this.state.mobileMenuOpen) {
+      mobileMenu.classList.add('open');
+      hamburgerBtn.classList.add('open');
+    } else {
+      mobileMenu.classList.remove('open');
+      hamburgerBtn.classList.remove('open');
+    }
+  },
+
+  closeMobileMenu() {
+    this.state.mobileMenuOpen = false;
+    const mobileMenu = document.getElementById('mobile-menu');
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    if (mobileMenu) mobileMenu.classList.remove('open');
+    if (hamburgerBtn) hamburgerBtn.classList.remove('open');
   },
 
   /**
@@ -104,8 +178,8 @@ const Navbar = {
       }
     });
 
-    // Update bottom nav links
-    document.querySelectorAll('.bottom-nav-item').forEach(link => {
+    // Update mobile menu links
+    document.querySelectorAll('.mobile-menu-link').forEach(link => {
       if (link.dataset.page === pageName) {
         link.classList.add('active');
       } else {

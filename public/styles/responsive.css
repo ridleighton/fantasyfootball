@@ -90,6 +90,21 @@
   }
 }
 
+/* Mobile specific (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: flex !important;
+  }
+
+  .hamburger-btn {
+    display: flex;
+  }
+}
+
 /* Mobile specific (max-width: 640px) */
 @media (max-width: 640px) {
   h1 { font-size: 1.75rem; }

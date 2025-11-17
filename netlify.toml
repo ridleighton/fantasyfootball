@@ -21,6 +21,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/games"
+  to = "/.netlify/functions/games-get"
+  status = 200
+
+[[redirects]]
   from = "/api/games/get"
   to = "/.netlify/functions/games-get"
   status = 200
@@ -28,6 +33,11 @@
 [[redirects]]
   from = "/api/games/weeks"
   to = "/.netlify/functions/games-weeks"
+  status = 200
+
+[[redirects]]
+  from = "/api/picks"
+  to = "/.netlify/functions/picks-get"
   status = 200
 
 [[redirects]]
@@ -71,8 +81,8 @@
   status = 200
 
 [[redirects]]
-  from = "/api/stats/user"
-  to = "/.netlify/functions/stats-user"
+  from = "/api/stats/user/:userId"
+  to = "/.netlify/functions/stats-user/:userId"
   status = 200
 
 [[redirects]]

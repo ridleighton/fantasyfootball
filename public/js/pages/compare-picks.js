@@ -24,12 +24,14 @@ const ComparePicksPage = {
     }
 
     try {
-      // Fetch current week
-      const weekResponse = await API.games.getCurrentWeek();
-      this.state.currentWeek = weekResponse.data.weekNumber;
-      this.state.currentYear = weekResponse.data.year;
+      // Only fetch current week if not already set (initial load)
+      if (!this.state.currentWeek) {
+        const weekResponse = await API.games.getCurrentWeek();
+        this.state.currentWeek = weekResponse.data.weekNumber;
+        this.state.currentYear = weekResponse.data.year;
+      }
 
-      // Fetch games
+      // Fetch games for the selected week
       const gamesResponse = await API.games.getGames(this.state.currentWeek, this.state.currentYear);
       this.state.games = gamesResponse.data;
 

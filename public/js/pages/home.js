@@ -102,9 +102,8 @@ const HomePage = {
         <a href="#picks" class="btn btn-primary">
           Make Your Picks
         </a>
-        <a href="#stats?week=${this.state.currentWeek}&year=${this.state.currentYear}&leagueId=${this.state.leagueId}"
-           class="btn btn-secondary">
-          📊 Compare Picks
+        <a href="#compare-picks" class="btn btn-secondary">
+          Compare Picks
         </a>
       </div>
     `;
@@ -192,7 +191,7 @@ const HomePage = {
         <div class="leaderboard-footer">
           <a href="#stats?week=${this.state.currentWeek}&year=${this.state.currentYear}&leagueId=${this.state.leagueId}"
              class="btn btn-secondary btn-full-width">
-            📊 See Full Week ${this.state.currentWeek} Comparison
+            See Full Week ${this.state.currentWeek} Stats
           </a>
         </div>
       </div>

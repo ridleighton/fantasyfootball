@@ -702,7 +702,6 @@
 .leaderboard-points {
   font-size: 1.25rem;
   font-weight: 500;
-  font-family: var(--font-mono);
   text-align: center;
 }
 

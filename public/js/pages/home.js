@@ -181,9 +181,6 @@ const HomePage = {
       <div class="leaderboard-container card">
         <div class="leaderboard-header">
           <h2>Week ${this.state.currentWeek} Standings</h2>
-          <button class="btn btn-text" id="view-season-leaderboard">
-            View Season Standings
-          </button>
         </div>
         <div class="leaderboard">
           ${rows}

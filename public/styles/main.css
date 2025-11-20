@@ -1767,6 +1767,28 @@
   margin-bottom: var(--spacing-xl);
 }
 
+.picks-submit-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-lg) 0;
+  padding: var(--spacing-md);
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.picks-submit-top .btn {
+  min-width: 250px;
+}
+
+.incomplete-notice {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
 .picks-form {
   margin-top: var(--spacing-lg);
 }

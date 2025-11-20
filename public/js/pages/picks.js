@@ -101,6 +101,8 @@ const PicksPage = {
    * Render header
    */
   renderHeader() {
+    const picksCount = Object.keys(this.state.picks).length;
+    const totalGames = this.state.games.length;
     const incomplete = this.state.games.filter(g =>
       g.gameStatus === 'scheduled' && !this.state.picks[g.id]
     ).length;
@@ -116,15 +118,16 @@ const PicksPage = {
         </p>
       </div>
 
-      ${incomplete > 0 && !this.state.locked ? `
-        <div class="incomplete-banner">
-          <div class="banner-text">
-            <strong>${incomplete} picks remaining</strong>
-            <span>Complete all picks before the first game starts</span>
-          </div>
-          <button id="submit-picks-btn" class="btn btn-primary">
-            Submit Picks (${Object.keys(this.state.picks).length}/${this.state.games.length})
+      ${!this.state.locked ? `
+        <div class="picks-submit-top">
+          <button id="submit-picks-btn" class="btn btn-primary btn-lg">
+            Submit All Picks (${picksCount}/${totalGames})
           </button>
+          ${incomplete > 0 ? `
+            <p class="incomplete-notice">
+              ${incomplete} pick${incomplete !== 1 ? 's' : ''} remaining
+            </p>
+          ` : ''}
         </div>
       ` : ''}
     `;
@@ -151,13 +154,6 @@ const PicksPage = {
         <div class="games-grid">
           ${gameCards}
         </div>
-        ${!this.state.locked ? `
-          <div class="picks-actions">
-            <button id="submit-picks-btn-bottom" class="btn btn-primary btn-lg">
-              Submit All Picks
-            </button>
-          </div>
-        ` : ''}
       </div>
     `;
   },
@@ -172,24 +168,24 @@ const PicksPage = {
       this.updatePicksCount(container);
     });
 
-    // Submit buttons
-    const submitBtns = container.querySelectorAll('#submit-picks-btn, #submit-picks-btn-bottom');
-    submitBtns.forEach(btn => {
-      btn.addEventListener('click', () => this.submitPicks(container));
-    });
+    // Submit button
+    const submitBtn = container.querySelector('#submit-picks-btn');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => this.submitPicks(container));
+    }
   },
 
   /**
    * Update picks count in UI
    */
   updatePicksCount(container) {
-    const submitBtns = container.querySelectorAll('#submit-picks-btn, #submit-picks-btn-bottom');
+    const submitBtn = container.querySelector('#submit-picks-btn');
     const count = Object.keys(this.state.picks).length;
     const total = this.state.games.length;
 
-    submitBtns.forEach(btn => {
-      btn.textContent = `Submit Picks (${count}/${total})`;
-    });
+    if (submitBtn) {
+      submitBtn.textContent = `Submit All Picks (${count}/${total})`;
+    }
   },
 
   /**

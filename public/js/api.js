@@ -115,7 +115,7 @@ const API = {
     },
 
     async submit(picks) {
-      return API.request('/picks', {
+      return API.request('/picks/submit', {
         method: 'POST',
         body: JSON.stringify({ picks }),
       });

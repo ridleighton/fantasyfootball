@@ -6,6 +6,29 @@
 
 const GameCard = {
   /**
+   * Helper function to check if game is final
+   */
+  isFinalStatus(status) {
+    return status === 'final' || status === 'status_final';
+  },
+
+  /**
+   * Helper function to check if game is in progress
+   */
+  isInProgressStatus(status) {
+    const inProgressStatuses = ['in_progress', 'in', 'halftime', 'status_in_progress'];
+    return inProgressStatuses.includes(status);
+  },
+
+  /**
+   * Helper function to check if game is scheduled/pending
+   */
+  isScheduledStatus(status) {
+    const scheduledStatuses = ['scheduled', 'status_scheduled', 'pre'];
+    return scheduledStatuses.includes(status);
+  },
+
+  /**
    * Render a game card
    * @param {Object} game - Game data
    * @param {Object} userPick - User's pick for this game (if exists)
@@ -15,9 +38,8 @@ const GameCard = {
    * @param {Number} leagueId - League ID
    */
   render(game, userPick = null, locked = false, week = null, year = null, leagueId = 1) {
-    const isFinal = game.gameStatus === 'final' || game.gameStatus === 'status_final';
-    const isInProgress = game.gameStatus === 'in_progress' || game.gameStatus === 'status_in_progress';
-    const isPending = game.gameStatus === 'scheduled' || game.gameStatus === 'status_scheduled' || game.gameStatus === 'pre';
+    const isFinal = this.isFinalStatus(game.gameStatus);
+    const isInProgress = this.isInProgressStatus(game.gameStatus);
 
     // Determine if card should be locked
     const isLocked = locked || isFinal || isInProgress;
@@ -44,8 +66,8 @@ const GameCard = {
       minute: '2-digit'
     });
 
-    const isFinal = game.gameStatus === 'final' || game.gameStatus === 'status_final';
-    const isInProgress = game.gameStatus === 'in_progress' || game.gameStatus === 'in';
+    const isFinal = this.isFinalStatus(game.gameStatus);
+    const isInProgress = this.isInProgressStatus(game.gameStatus);
 
     let statusBadge = '';
     if (isFinal) {
@@ -74,7 +96,8 @@ const GameCard = {
     const homeSelected = userPick?.predictedWinner === 'home';
     const tieSelected = userPick?.predictedWinner === 'tie';
 
-    const isFinal = game.gameStatus === 'final' || game.gameStatus === 'status_final';
+    const isFinal = this.isFinalStatus(game.gameStatus);
+    const isScheduled = this.isScheduledStatus(game.gameStatus);
 
     return `
       <div class="game-matchup">
@@ -95,7 +118,7 @@ const GameCard = {
         <!-- VS Separator -->
         <div class="game-vs">
           <div class="vs-text">@</div>
-          ${!isLocked && (game.gameStatus === 'scheduled' || game.gameStatus === 'status_scheduled' || game.gameStatus === 'pre') ? `
+          ${!isLocked && isScheduled ? `
             <button class="btn-text tie-btn" data-team="tie" data-game-id="${game.id}">
               ${tieSelected ? '✓ Tie' : 'Tie'}
             </button>
@@ -123,7 +146,7 @@ const GameCard = {
    * Render footer with actions
    */
   renderFooter(game, userPick) {
-    const isFinal = game.gameStatus === 'final' || game.gameStatus === 'status_final';
+    const isFinal = this.isFinalStatus(game.gameStatus);
 
     let pickResult = '';
     if (userPick && isFinal) {

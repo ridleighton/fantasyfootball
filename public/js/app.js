@@ -12,41 +12,30 @@ const App = {
 
     try {
       // Check authentication
-      console.log('[App] Checking authentication...');
       const isAuthenticated = await Auth.init();
-      console.log('[App] Authentication result:', isAuthenticated);
 
       if (!isAuthenticated) {
-        console.log('[App] User not authenticated, showing login page');
         // Show login page
         this.showLoginPage();
       } else {
-        console.log('[App] User authenticated, initializing app');
 
         // Check if user must change password
         if (Auth.mustChangePassword()) {
-          console.log('[App] User must change password');
           this.showChangePasswordModal();
         }
 
         // Initialize navigation
-        console.log('[App] Initializing navigation...');
         Navbar.init();
 
         // Start automatic game syncing
-        console.log('[App] Starting automatic game sync...');
         GameSync.start().catch(err => {
-          console.error('[App] Failed to start game sync:', err);
         });
 
         // Route to appropriate page
-        console.log('[App] Routing to page...');
         this.route();
 
-        console.log('[App] ✓ App initialization complete');
       }
     } catch (error) {
-      console.error('[App] ✗ App initialization error:', error);
       UI.showToast('Failed to initialize app', 'error');
     } finally {
       UI.hideLoading();

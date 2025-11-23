@@ -45,12 +45,13 @@ const PicksPage = {
         this.state.picks[pick.gameId] = pick.predictedWinner;
       });
 
-      // Check if picks are locked (first game started)
+      // Check if ALL games have started (for showing submit button)
       const now = new Date();
-      const firstGame = this.state.games.sort((a, b) =>
-        new Date(a.gameTime) - new Date(b.gameTime)
-      )[0];
-      this.state.locked = firstGame && new Date(firstGame.gameTime) < now;
+      const allGamesStarted = this.state.games.every(game => {
+        const gameTime = new Date(game.gameTime);
+        return gameTime < now;
+      });
+      this.state.locked = allGamesStarted;
 
       container.innerHTML = `
         <div class="picks-page">
@@ -103,16 +104,21 @@ const PicksPage = {
   renderHeader() {
     const picksCount = Object.keys(this.state.picks).length;
     const totalGames = this.state.games.length;
-    const incomplete = this.state.games.filter(g =>
-      g.gameStatus === 'scheduled' && !this.state.picks[g.id]
-    ).length;
+    const now = new Date();
+
+    // Count games that haven't started yet and don't have picks
+    const incomplete = this.state.games.filter(g => {
+      const gameTime = new Date(g.gameTime);
+      const isScheduled = gameTime > now;
+      return isScheduled && !this.state.picks[g.id];
+    }).length;
 
     return `
       <div class="picks-header">
         <h1>Week ${this.state.currentWeek} Picks</h1>
         <p class="picks-subtitle">
           ${this.state.locked
-            ? 'Picks are locked - games have started'
+            ? 'All games have started - picks are locked'
             : `Make your predictions for ${this.state.games.length} games`
           }
         </p>
@@ -137,12 +143,17 @@ const PicksPage = {
    * Render picks form
    */
   renderPicksForm() {
+    const now = new Date();
     const gameCards = this.state.games.map(game => {
       const userPick = this.state.existingPicks.find(p => p.gameId === game.id);
+      // Each game locks individually when it starts
+      const gameTime = new Date(game.gameTime);
+      const gameHasStarted = gameTime < now;
+
       return GameCard.render(
         game,
         userPick,
-        this.state.locked,
+        gameHasStarted, // Lock this specific game if it has started
         this.state.currentWeek,
         this.state.currentYear,
         this.state.leagueId

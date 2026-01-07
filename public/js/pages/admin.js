@@ -183,9 +183,22 @@ const AdminPage = {
         </div>
 
         <div class="sync-controls">
+          <div class="form-group" style="margin-bottom: var(--spacing-lg);">
+            <label class="form-label">Quick Sync Actions:</label>
+            <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
+              <button class="btn btn-primary" id="sync-weekly-btn" style="min-width: 180px;">
+                🔄 Sync Weekly Schedule
+              </button>
+              <button class="btn btn-secondary" id="sync-live-btn" style="min-width: 180px;">
+                ⚡ Sync Live Games
+              </button>
+            </div>
+            <small class="form-hint">Weekly: Syncs current + next 2 weeks. Live: Updates active games only.</small>
+          </div>
+
           <div class="form-group">
-            <label class="form-label">Week to Sync:</label>
-            <div style="display: flex; gap: var(--spacing-md); align-items: center;">
+            <label class="form-label">Sync Specific Week:</label>
+            <div style="display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap;">
               <select id="sync-week" class="form-input" style="max-width: 150px;">
                 ${Array.from({length: 18}, (_, i) => i + 1).map(week => `
                   <option value="${week}" ${week === currentWeek ? 'selected' : ''}>
@@ -195,18 +208,26 @@ const AdminPage = {
               </select>
 
               <select id="sync-year" class="form-input" style="max-width: 150px;">
-                ${[2024, 2025].map(year => `
+                ${[2024, 2025, 2026].map(year => `
                   <option value="${year}" ${year === currentYear ? 'selected' : ''}>
                     ${year}
                   </option>
                 `).join('')}
               </select>
 
+              <select id="sync-week-type" class="form-input" style="max-width: 150px;">
+                <option value="regular">Regular Season</option>
+                <option value="wildcard">Wildcard</option>
+                <option value="divisional">Divisional</option>
+                <option value="conference">Conference</option>
+                <option value="superbowl">Super Bowl</option>
+              </select>
+
               <button class="btn btn-primary" id="sync-games-btn">
                 Sync from ESPN
               </button>
             </div>
-            <small class="form-hint">Select a week and year, then click Sync to fetch games from ESPN</small>
+            <small class="form-hint">Select specific week, year, and type to sync</small>
           </div>
 
           <div id="sync-result" class="sync-result" style="margin-top: var(--spacing-md);"></div>
@@ -214,28 +235,98 @@ const AdminPage = {
       </div>
     `;
 
-    // Sync button
+    // Quick sync buttons
+    const syncWeeklyBtn = container.querySelector('#sync-weekly-btn');
+    const syncLiveBtn = container.querySelector('#sync-live-btn');
+    const resultDiv = container.querySelector('#sync-result');
+
+    if (syncWeeklyBtn) {
+      syncWeeklyBtn.addEventListener('click', async () => {
+        try {
+          syncWeeklyBtn.disabled = true;
+          syncWeeklyBtn.textContent = 'Syncing...';
+          resultDiv.innerHTML = '<p class="info-message">Running weekly sync (current + next 2 weeks)...</p>';
+
+          const response = await API.admin.games.syncWeekly();
+
+          resultDiv.innerHTML = `
+            <div class="success-message">
+              <p><strong>✓ Weekly Sync Complete!</strong></p>
+              <p>${response.message}</p>
+            </div>
+          `;
+
+          UI.showToast('Weekly sync completed successfully!', 'success');
+        } catch (error) {
+          resultDiv.innerHTML = `
+            <div class="error-message">
+              <p><strong>✗ Sync Failed</strong></p>
+              <p>${error.message || 'Failed to run weekly sync'}</p>
+            </div>
+          `;
+          UI.showToast(error.message || 'Failed to run weekly sync', 'error');
+        } finally {
+          syncWeeklyBtn.disabled = false;
+          syncWeeklyBtn.textContent = '🔄 Sync Weekly Schedule';
+        }
+      });
+    }
+
+    if (syncLiveBtn) {
+      syncLiveBtn.addEventListener('click', async () => {
+        try {
+          syncLiveBtn.disabled = true;
+          syncLiveBtn.textContent = 'Syncing...';
+          resultDiv.innerHTML = '<p class="info-message">Updating live games...</p>';
+
+          const response = await API.admin.games.syncLive();
+
+          resultDiv.innerHTML = `
+            <div class="success-message">
+              <p><strong>✓ Live Sync Complete!</strong></p>
+              <p>${response.message}</p>
+            </div>
+          `;
+
+          UI.showToast('Live games updated successfully!', 'success');
+        } catch (error) {
+          resultDiv.innerHTML = `
+            <div class="error-message">
+              <p><strong>✗ Sync Failed</strong></p>
+              <p>${error.message || 'Failed to sync live games'}</p>
+            </div>
+          `;
+          UI.showToast(error.message || 'Failed to sync live games', 'error');
+        } finally {
+          syncLiveBtn.disabled = false;
+          syncLiveBtn.textContent = '⚡ Sync Live Games';
+        }
+      });
+    }
+
+    // Specific week sync button
     const syncBtn = container.querySelector('#sync-games-btn');
     const weekSelect = container.querySelector('#sync-week');
     const yearSelect = container.querySelector('#sync-year');
-    const resultDiv = container.querySelector('#sync-result');
+    const weekTypeSelect = container.querySelector('#sync-week-type');
 
     if (syncBtn) {
       syncBtn.addEventListener('click', async () => {
         const week = parseInt(weekSelect.value);
         const year = parseInt(yearSelect.value);
+        const weekType = weekTypeSelect.value;
 
         try {
           syncBtn.disabled = true;
           syncBtn.textContent = 'Syncing...';
           resultDiv.innerHTML = '<p class="info-message">Fetching games from ESPN...</p>';
 
-          const response = await API.admin.games.sync(week, year);
+          const response = await API.admin.games.sync(week, year, weekType);
 
           resultDiv.innerHTML = `
             <div class="success-message">
               <p><strong>✓ Sync Complete!</strong></p>
-              <p>Week ${response.data.week}, ${response.data.year}</p>
+              <p>${response.data.weekType} Week ${response.data.week}, ${response.data.year}</p>
               <p>${response.data.gamesAdded} games added, ${response.data.gamesUpdated} games updated</p>
               <p>Total: ${response.data.totalGames} games</p>
             </div>

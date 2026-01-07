@@ -139,13 +139,21 @@ const syncLiveGames = async () => {
 
 // Export handler that works both as scheduled and on-demand
 const handler = async (event, context) => {
+  console.log('=== Live Game Sync Handler Started ===');
+  console.log('HTTP Method:', event.httpMethod);
+  console.log('Event path:', event.path);
+
   try {
     // Allow admin users to trigger manually via POST
     if (event.httpMethod === 'POST') {
+      console.log('POST request detected, checking auth...');
+
       const { getUserIdFromToken } = require('./auth-helper');
       const userId = getUserIdFromToken(event);
+      console.log('User ID from token:', userId);
 
       if (!userId) {
+        console.log('No user ID found, returning 401');
         return {
           statusCode: 401,
           headers: { 'Content-Type': 'application/json' },
@@ -154,14 +162,20 @@ const handler = async (event, context) => {
       }
 
       // Check if user is admin
+      console.log('Creating DB connection...');
       const db = await createClient();
+      console.log('Checking admin status...');
+
       const adminCheck = await db.query(
         'SELECT is_admin FROM users WHERE id = $1',
         [userId]
       );
+      console.log('Admin check result:', adminCheck.rows);
+
       await db.end();
 
       if (adminCheck.rows.length === 0 || !adminCheck.rows[0].is_admin) {
+        console.log('User is not admin, returning 403');
         return {
           statusCode: 403,
           headers: { 'Content-Type': 'application/json' },
@@ -170,7 +184,10 @@ const handler = async (event, context) => {
       }
 
       // Run the sync
+      console.log('Running live games sync...');
       await syncLiveGames();
+      console.log('Live sync completed successfully');
+
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -182,7 +199,10 @@ const handler = async (event, context) => {
     }
 
     // For scheduled runs, just execute the sync
+    console.log('Scheduled run detected, executing sync...');
     await syncLiveGames();
+    console.log('Scheduled sync completed');
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -192,13 +212,19 @@ const handler = async (event, context) => {
       })
     };
   } catch (error) {
-    console.error('Handler error:', error);
+    console.error('=== HANDLER ERROR ===');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: 'Sync failed',
         message: error.message,
+        name: error.name,
         stack: error.stack
       })
     };

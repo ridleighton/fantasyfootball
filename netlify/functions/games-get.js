@@ -26,17 +26,34 @@ exports.handler = async (event, context) => {
 
     const db = await createClient();
 
-    const result = await db.query(
-      `SELECT
+    // Get week_type parameter if provided
+    const weekType = params.weekType || params.week_type;
+
+    // Build query based on whether weekType is provided
+    let query, queryParams;
+    if (weekType) {
+      query = `SELECT
+        id, espn_game_id, season_year, week_number, week_type,
+        home_team, home_team_abbr, home_team_logo, home_score,
+        away_team, away_team_abbr, away_team_logo, away_score,
+        game_time, game_status, winner, sync_override
+       FROM games
+       WHERE season_year = $1 AND week_number = $2 AND week_type = $3
+       ORDER BY game_time ASC`;
+      queryParams = [year, week, weekType];
+    } else {
+      query = `SELECT
         id, espn_game_id, season_year, week_number, week_type,
         home_team, home_team_abbr, home_team_logo, home_score,
         away_team, away_team_abbr, away_team_logo, away_score,
         game_time, game_status, winner, sync_override
        FROM games
        WHERE season_year = $1 AND week_number = $2
-       ORDER BY game_time ASC`,
-      [year, week]
-    );
+       ORDER BY game_time ASC`;
+      queryParams = [year, week];
+    }
+
+    const result = await db.query(query, queryParams);
 
     return {
       statusCode: 200,

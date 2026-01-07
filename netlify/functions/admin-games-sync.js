@@ -36,22 +36,41 @@ exports.handler = async (event, context) => {
     }
 
     // Parse request body
-    const { week, year } = JSON.parse(event.body || '{}');
+    const { week, year, weekType } = JSON.parse(event.body || '{}');
     const currentYear = year || new Date().getFullYear();
 
-    // Default to current NFL week (approximate based on date)
-    let defaultWeek = 1;
-    const now = new Date();
-    const seasonStart = new Date(currentYear, 8, 1); // September 1st
-    if (now >= seasonStart) {
-      const daysSinceStart = Math.floor((now - seasonStart) / (1000 * 60 * 60 * 24));
-      defaultWeek = Math.min(Math.floor(daysSinceStart / 7) + 1, 18);
+    // Determine week type and number
+    let weekNumber = week;
+    let seasonType = 2; // Regular season
+    let calculatedWeekType = weekType || 'regular';
+
+    // If no week specified, try to determine current week
+    if (!weekNumber) {
+      const now = new Date();
+      const seasonStart = new Date(currentYear, 8, 1); // September 1st
+      if (now >= seasonStart) {
+        const daysSinceStart = Math.floor((now - seasonStart) / (1000 * 60 * 60 * 24));
+        weekNumber = Math.min(Math.floor(daysSinceStart / 7) + 1, 18);
+      } else {
+        weekNumber = 1;
+      }
     }
 
-    const weekNumber = week || defaultWeek;
+    // Handle playoff weeks
+    if (calculatedWeekType !== 'regular') {
+      seasonType = 3; // Playoffs
+      // Map week types to ESPN playoff week numbers
+      const playoffWeekMap = {
+        'wildcard': 1,
+        'divisional': 2,
+        'conference': 3,
+        'superbowl': 4
+      };
+      weekNumber = playoffWeekMap[calculatedWeekType] || weekNumber;
+    }
 
     // Fetch games from ESPN API
-    const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${currentYear}&seasontype=2&week=${weekNumber}`;
+    const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${currentYear}&seasontype=${seasonType}&week=${weekNumber}`;
     const response = await fetch(espnUrl);
 
     if (!response.ok) {
@@ -77,7 +96,7 @@ exports.handler = async (event, context) => {
         espnGameId: event.id,
         seasonYear: currentYear,
         weekNumber: weekNumber,
-        weekType: 'regular',
+        weekType: calculatedWeekType,
         homeTeam: homeTeam.team.displayName,
         homeTeamAbbr: homeTeam.team.abbreviation,
         homeTeamLogo: homeTeam.team.logo,
@@ -170,9 +189,11 @@ exports.handler = async (event, context) => {
           gamesUpdated,
           totalGames: events.length,
           week: weekNumber,
-          year: currentYear
+          year: currentYear,
+          weekType: calculatedWeekType,
+          seasonType: seasonType
         },
-        message: `Synced ${events.length} games (${gamesAdded} added, ${gamesUpdated} updated)`
+        message: `Synced ${events.length} games for ${calculatedWeekType} week ${weekNumber} (${gamesAdded} added, ${gamesUpdated} updated)`
       })
     };
 

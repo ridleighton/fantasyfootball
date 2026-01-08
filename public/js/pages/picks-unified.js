@@ -92,6 +92,16 @@ const PicksUnifiedPage = {
         this.state.selectedWeekType === this.state.currentWeekType
       );
 
+      console.log('[PicksUnified] Week check:', {
+        selectedWeek: this.state.selectedWeek,
+        selectedYear: this.state.selectedYear,
+        selectedWeekType: this.state.selectedWeekType,
+        currentWeek: this.state.currentWeek,
+        currentYear: this.state.currentYear,
+        currentWeekType: this.state.currentWeekType,
+        isCurrentWeek: this.state.isCurrentWeek
+      });
+
       // Fetch games and existing picks
       const [gamesResponse, picksResponse] = await Promise.all([
         API.games.getGames(this.state.selectedWeek, this.state.selectedYear, this.state.selectedWeekType),
@@ -323,6 +333,14 @@ const PicksUnifiedPage = {
       const gameTime = new Date(game.gameTime);
       const gameHasStarted = gameTime < now;
       const canEdit = this.state.isCurrentWeek && !gameHasStarted;
+
+      console.log('[PicksUnified] Game:', game.id, {
+        isCurrentWeek: this.state.isCurrentWeek,
+        gameHasStarted,
+        canEdit,
+        gameTime: gameTime.toISOString(),
+        now: now.toISOString()
+      });
 
       return this.renderGameCard(game, userPick, canEdit);
     }).join('');

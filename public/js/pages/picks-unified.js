@@ -92,7 +92,7 @@ const PicksUnifiedPage = {
       // Fetch games and existing picks
       const [gamesResponse, picksResponse] = await Promise.all([
         API.games.getGames(this.state.selectedWeek, this.state.selectedYear, this.state.selectedWeekType),
-        API.picks.get(this.state.selectedWeek, this.state.selectedYear, this.state.leagueId)
+        API.picks.get(this.state.selectedWeek, this.state.selectedYear, this.state.leagueId, this.state.selectedWeekType)
       ]);
 
       this.state.games = gamesResponse.data;
@@ -158,25 +158,27 @@ const PicksUnifiedPage = {
   },
 
   /**
+   * Get display name for week type
+   */
+  getWeekDisplayName(weekType) {
+    const weekTypeNames = {
+      'regular': 'Regular Season',
+      'wildcard': 'Wild Card',
+      'divisional': 'Divisional',
+      'conference': 'Conference Championship',
+      'superbowl': 'Super Bowl'
+    };
+    return weekTypeNames[weekType] || weekType;
+  },
+
+  /**
    * Render header with week selector inline
    */
   renderHeader() {
-    // Get display name for current week
-    const getWeekDisplayName = (weekType) => {
-      const weekTypeNames = {
-        'regular': 'Regular Season',
-        'wildcard': 'Wild Card',
-        'divisional': 'Divisional',
-        'conference': 'Conference Championship',
-        'superbowl': 'Super Bowl'
-      };
-      return weekTypeNames[weekType] || weekType;
-    };
-
     // For header title - show week number only for regular season
     const headerTitle = this.state.selectedWeekType === 'regular'
       ? `Week ${this.state.selectedWeek}`
-      : getWeekDisplayName(this.state.selectedWeekType);
+      : this.getWeekDisplayName(this.state.selectedWeekType);
 
     return `
       <div class="picks-header-unified">
@@ -205,7 +207,7 @@ const PicksUnifiedPage = {
                   if (week.weekType === 'regular') {
                     displayLabel = `Week ${week.weekNumber} (Regular Season) (${week.year})`;
                   } else {
-                    displayLabel = `${getWeekDisplayName(week.weekType)} (${week.year})`;
+                    displayLabel = `${this.getWeekDisplayName(week.weekType)} (${week.year})`;
                   }
 
                   return `

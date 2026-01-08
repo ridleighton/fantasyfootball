@@ -110,12 +110,20 @@ const API = {
 
   // Picks
   picks: {
-    async get(week, year, leagueId) {
-      return API.request(`/picks?week=${week}&year=${year}&leagueId=${leagueId}`);
+    async get(week, year, leagueId, weekType = null) {
+      let url = `/picks?week=${week}&year=${year}&leagueId=${leagueId}`;
+      if (weekType) {
+        url += `&weekType=${weekType}`;
+      }
+      return API.request(url);
     },
 
-    async getAll(week, year, leagueId) {
-      return API.request(`/picks/all?week=${week}&year=${year}&leagueId=${leagueId}`);
+    async getAll(week, year, leagueId, weekType = null) {
+      let url = `/picks/all?week=${week}&year=${year}&leagueId=${leagueId}`;
+      if (weekType) {
+        url += `&weekType=${weekType}`;
+      }
+      return API.request(url);
     },
 
     async submit(picks) {

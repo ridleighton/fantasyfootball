@@ -53,10 +53,8 @@ const App = {
     // Determine which page to show
     if (path === '/' && !hash) {
       this.showPage('home');
-    } else if (hash === 'picks' || path === '/picks') {
+    } else if (hash === 'picks' || path === '/picks' || hash === 'history' || path === '/history') {
       this.showPage('picks');
-    } else if (hash === 'history' || path === '/history') {
-      this.showPage('history');
     } else if (hash === 'profile' || path === '/profile') {
       this.showPage('profile');
     } else if (hash === 'compare-picks' || path === '/compare-picks') {
@@ -90,10 +88,7 @@ const App = {
           await HomePage.render(mainContent);
           break;
         case 'picks':
-          await PicksPage.render(mainContent);
-          break;
-        case 'history':
-          await HistoryPage.render(mainContent);
+          await PicksUnifiedPage.render(mainContent);
           break;
         case 'profile':
           await ProfilePage.render(mainContent);

@@ -1875,6 +1875,58 @@
   margin-top: var(--spacing-xl);
 }
 
+/* Unified Picks/History Page */
+.picks-header-unified {
+  margin-bottom: var(--spacing-xl);
+}
+
+.picks-header-unified .header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.picks-header-unified .header-left h1 {
+  margin: 0;
+  text-align: left;
+}
+
+.picks-header-unified .header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.week-selector-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.week-selector-inline .form-input {
+  min-width: 180px;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .picks-header-unified .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .picks-header-unified .header-left h1 {
+    text-align: center;
+    width: 100%;
+  }
+
+  .picks-header-unified .header-right {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* History Page */
 .history-page {
   max-width: 1200px;

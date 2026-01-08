@@ -125,6 +125,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/admin/fix-week-types"
+  to = "/.netlify/functions/admin-fix-week-types"
+  status = 200
+
+[[redirects]]
   from = "/api/setup/database"
   to = "/.netlify/functions/setup-database"
   status = 200

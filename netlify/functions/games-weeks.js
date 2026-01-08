@@ -22,7 +22,16 @@ exports.handler = async (event, context) => {
               COUNT(*) as game_count
        FROM games
        GROUP BY season_year, week_number, week_type
-       ORDER BY season_year DESC, week_number DESC`
+       ORDER BY season_year DESC,
+                CASE
+                  WHEN week_type = 'regular' THEN 0
+                  WHEN week_type = 'wildcard' THEN 1
+                  WHEN week_type = 'divisional' THEN 2
+                  WHEN week_type = 'conference' THEN 3
+                  WHEN week_type = 'superbowl' THEN 4
+                  ELSE 5
+                END DESC,
+                week_number DESC`
     );
 
     return {

@@ -95,8 +95,12 @@ const API = {
       return API.request('/games/current-week');
     },
 
-    async getGames(week, year) {
-      return API.request(`/games?week=${week}&year=${year}`);
+    async getGames(week, year, weekType = null) {
+      let url = `/games?week=${week}&year=${year}`;
+      if (weekType) {
+        url += `&weekType=${weekType}`;
+      }
+      return API.request(url);
     },
 
     async getWeeks() {

@@ -91,7 +91,7 @@ const PicksUnifiedPage = {
 
       // Fetch games and existing picks
       const [gamesResponse, picksResponse] = await Promise.all([
-        API.games.getGames(this.state.selectedWeek, this.state.selectedYear),
+        API.games.getGames(this.state.selectedWeek, this.state.selectedYear, this.state.selectedWeekType),
         API.picks.get(this.state.selectedWeek, this.state.selectedYear, this.state.leagueId)
       ]);
 
@@ -161,14 +161,28 @@ const PicksUnifiedPage = {
    * Render header with week selector inline
    */
   renderHeader() {
-    const weekTypeLabel = this.state.selectedWeekType === 'regular' ? '' :
-      ` (${this.state.selectedWeekType.charAt(0).toUpperCase() + this.state.selectedWeekType.slice(1)})`;
+    // Get display name for current week
+    const getWeekDisplayName = (weekType) => {
+      const weekTypeNames = {
+        'regular': 'Regular Season',
+        'wildcard': 'Wild Card',
+        'divisional': 'Divisional',
+        'conference': 'Conference Championship',
+        'superbowl': 'Super Bowl'
+      };
+      return weekTypeNames[weekType] || weekType;
+    };
+
+    // For header title - show week number only for regular season
+    const headerTitle = this.state.selectedWeekType === 'regular'
+      ? `Week ${this.state.selectedWeek}`
+      : getWeekDisplayName(this.state.selectedWeekType);
 
     return `
       <div class="picks-header-unified">
         <div class="header-content">
           <div class="header-left">
-            <h1>Week ${this.state.selectedWeek}${weekTypeLabel}</h1>
+            <h1>${headerTitle}</h1>
             ${this.state.isCurrentWeek && !this.state.locked
               ? `<p class="picks-subtitle">Make your predictions for ${this.state.games.length} games</p>`
               : this.state.locked && this.state.isCurrentWeek
@@ -180,19 +194,26 @@ const PicksUnifiedPage = {
             <div class="week-selector-inline">
               <select id="week-select" class="form-input">
                 ${this.state.availableWeeks.map(week => {
-                  const weekTypeShort = week.weekType === 'regular' ? '' :
-                    ` (${week.weekType.substring(0, 3)})`;
                   const isSelected = (
                     week.weekNumber === this.state.selectedWeek &&
                     week.year === this.state.selectedYear &&
                     week.weekType === this.state.selectedWeekType
                   );
+
+                  // Display label for dropdown
+                  let displayLabel;
+                  if (week.weekType === 'regular') {
+                    displayLabel = `Week ${week.weekNumber} (Regular Season) (${week.year})`;
+                  } else {
+                    displayLabel = `${getWeekDisplayName(week.weekType)} (${week.year})`;
+                  }
+
                   return `
                     <option value="${week.weekNumber}"
                             data-year="${week.year}"
                             data-week-type="${week.weekType}"
                             ${isSelected ? 'selected' : ''}>
-                      Week ${week.weekNumber}${weekTypeShort} (${week.year})
+                      ${displayLabel}
                     </option>
                   `;
                 }).join('')}

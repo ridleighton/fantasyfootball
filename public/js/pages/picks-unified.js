@@ -41,8 +41,11 @@ const PicksUnifiedPage = {
 
       this.state.currentWeek = weekResponse.data.weekNumber;
       this.state.currentYear = weekResponse.data.year;
-      this.state.currentWeekType = weekResponse.data.weekType;
-      this.state.availableWeeks = weeksResponse.data;
+      this.state.currentWeekType = this.normalizeWeekType(weekResponse.data.weekType);
+      this.state.availableWeeks = weeksResponse.data.map(week => ({
+        ...week,
+        weekType: this.normalizeWeekType(week.weekType)
+      }));
 
       // Set selected week based on route
       if (!this.state.selectedWeek) {
@@ -158,6 +161,17 @@ const PicksUnifiedPage = {
   },
 
   /**
+   * Normalize week type - convert numeric values to proper text
+   */
+  normalizeWeekType(weekType) {
+    // Handle numeric week types (legacy data)
+    if (weekType === '1' || weekType === '2' || weekType === '3' || weekType === 1 || weekType === 2 || weekType === 3) {
+      return 'regular';
+    }
+    return weekType;
+  },
+
+  /**
    * Get display name for week type
    */
   getWeekDisplayName(weekType) {
@@ -175,13 +189,6 @@ const PicksUnifiedPage = {
    * Render header with week selector inline
    */
   renderHeader() {
-    console.log('[PicksUnified] renderHeader - availableWeeks:', this.state.availableWeeks);
-    console.log('[PicksUnified] renderHeader - selected:', {
-      week: this.state.selectedWeek,
-      year: this.state.selectedYear,
-      weekType: this.state.selectedWeekType
-    });
-
     // For header title - show week number only for regular season
     const headerTitle = this.state.selectedWeekType === 'regular'
       ? `Week ${this.state.selectedWeek}`
@@ -216,8 +223,6 @@ const PicksUnifiedPage = {
                   } else {
                     displayLabel = `${this.getWeekDisplayName(week.weekType)} (${week.year})`;
                   }
-
-                  console.log('[PicksUnified] Dropdown option:', { week, index, displayLabel, isSelected });
 
                   return `
                     <option value="${index}"

@@ -193,7 +193,7 @@ const PicksUnifiedPage = {
           <div class="header-right">
             <div class="week-selector-inline">
               <select id="week-select" class="form-input">
-                ${this.state.availableWeeks.map(week => {
+                ${this.state.availableWeeks.map((week, index) => {
                   const isSelected = (
                     week.weekNumber === this.state.selectedWeek &&
                     week.year === this.state.selectedYear &&
@@ -209,7 +209,8 @@ const PicksUnifiedPage = {
                   }
 
                   return `
-                    <option value="${week.weekNumber}"
+                    <option value="${index}"
+                            data-week-number="${week.weekNumber}"
                             data-year="${week.year}"
                             data-week-type="${week.weekType}"
                             ${isSelected ? 'selected' : ''}>
@@ -447,7 +448,7 @@ const PicksUnifiedPage = {
     if (weekSelect) {
       weekSelect.addEventListener('change', async () => {
         const selectedOption = weekSelect.options[weekSelect.selectedIndex];
-        this.state.selectedWeek = parseInt(selectedOption.value);
+        this.state.selectedWeek = parseInt(selectedOption.dataset.weekNumber);
         this.state.selectedYear = parseInt(selectedOption.dataset.year);
         this.state.selectedWeekType = selectedOption.dataset.weekType;
         await this.render(container);

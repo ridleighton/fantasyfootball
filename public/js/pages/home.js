@@ -8,6 +8,7 @@ const HomePage = {
   state: {
     currentWeek: null,
     currentYear: null,
+    currentWeekType: null,
     leagueId: 1 // Default league
   },
 
@@ -25,11 +26,14 @@ const HomePage = {
       const weekResponse = await API.games.getCurrentWeek();
       this.state.currentWeek = weekResponse.data.weekNumber;
       this.state.currentYear = weekResponse.data.year;
+      this.state.currentWeekType = weekResponse.data.weekType;
 
       // Fetch leaderboard data
       const leaderboardResponse = await API.leaderboard.getWeek(
         this.state.currentWeek,
-        this.state.leagueId
+        this.state.leagueId,
+        this.state.currentYear,
+        this.state.currentWeekType
       );
 
       container.innerHTML = `

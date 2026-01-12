@@ -17,6 +17,7 @@ exports.handler = async (event, context) => {
     const week = parseInt(params.week);
     const leagueId = parseInt(params.leagueId);
     const year = parseInt(params.year) || new Date().getFullYear();
+    const weekType = params.weekType || params.week_type;
 
     if (!week || !leagueId) {
       return {
@@ -27,8 +28,29 @@ exports.handler = async (event, context) => {
 
     const db = await createClient();
 
-    const result = await db.query(
-      `SELECT
+    // Build query based on whether weekType is provided
+    let query, queryParams;
+    if (weekType) {
+      query = `SELECT
+        u.id as user_id,
+        u.username,
+        u.display_name,
+        u.primary_color,
+        COUNT(CASE WHEN p.is_correct = true THEN 1 END) as wins,
+        COUNT(CASE WHEN p.is_correct = false THEN 1 END) as losses,
+        COUNT(CASE WHEN p.is_correct IS NULL AND g.game_status = 'final' THEN 1 END) as ties,
+        COUNT(CASE WHEN p.is_correct = true THEN 1 END) as points,
+        RANK() OVER (ORDER BY COUNT(CASE WHEN p.is_correct = true THEN 1 END) DESC) as rank
+      FROM league_members lm
+      JOIN users u ON lm.user_id = u.id
+      LEFT JOIN picks p ON u.id = p.user_id AND p.league_id = lm.league_id
+      LEFT JOIN games g ON p.game_id = g.id AND g.season_year = $1 AND g.week_number = $2 AND g.week_type = $4
+      WHERE lm.league_id = $3
+      GROUP BY u.id, u.username, u.display_name, u.primary_color
+      ORDER BY points DESC, u.display_name ASC`;
+      queryParams = [year, week, leagueId, weekType];
+    } else {
+      query = `SELECT
         u.id as user_id,
         u.username,
         u.display_name,
@@ -44,9 +66,11 @@ exports.handler = async (event, context) => {
       LEFT JOIN games g ON p.game_id = g.id AND g.season_year = $1 AND g.week_number = $2
       WHERE lm.league_id = $3
       GROUP BY u.id, u.username, u.display_name, u.primary_color
-      ORDER BY points DESC, u.display_name ASC`,
-      [year, week, leagueId]
-    );
+      ORDER BY points DESC, u.display_name ASC`;
+      queryParams = [year, week, leagueId];
+    }
+
+    const result = await db.query(query, queryParams);
 
     await db.end();
 

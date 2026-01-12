@@ -31,6 +31,7 @@ exports.handler = async (event, context) => {
     const week = parseInt(params.week);
     const year = parseInt(params.year) || new Date().getFullYear();
     const leagueId = parseInt(params.leagueId);
+    const weekType = params.weekType || params.week_type;
 
     if (!week || !leagueId) {
       return {
@@ -56,39 +57,82 @@ exports.handler = async (event, context) => {
     }
 
     // Get all games for the specified week
-    const gamesResult = await db.query(
-      `SELECT id, espn_game_id, week_number, week_type,
+    let gamesQuery, gamesParams;
+    if (weekType) {
+      gamesQuery = `SELECT id, espn_game_id, week_number, week_type,
+              home_team, home_team_abbr, home_team_logo, home_score,
+              away_team, away_team_abbr, away_team_logo, away_score,
+              game_time, game_status, winner
+       FROM games
+       WHERE season_year = $1 AND week_number = $2 AND week_type = $3
+       ORDER BY game_time`;
+      gamesParams = [year, week, weekType];
+    } else {
+      gamesQuery = `SELECT id, espn_game_id, week_number, week_type,
               home_team, home_team_abbr, home_team_logo, home_score,
               away_team, away_team_abbr, away_team_logo, away_score,
               game_time, game_status, winner
        FROM games
        WHERE season_year = $1 AND week_number = $2
-       ORDER BY game_time`,
-      [year, week]
-    );
+       ORDER BY game_time`;
+      gamesParams = [year, week];
+    }
+    const gamesResult = await db.query(gamesQuery, gamesParams);
 
     const games = gamesResult.rows;
 
     // Get logged-in user's picks and stats for this week
-    const yourPicksResult = await db.query(
-      `SELECT p.*, u.display_name, u.primary_color
+    let yourPicksQuery, yourPicksParams;
+    if (weekType) {
+      yourPicksQuery = `SELECT p.*, u.display_name, u.primary_color
+       FROM picks p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.user_id = $1 AND p.league_id = $2
+         AND p.game_id IN (
+           SELECT id FROM games
+           WHERE season_year = $3 AND week_number = $4 AND week_type = $5
+         )`;
+      yourPicksParams = [userId, leagueId, year, week, weekType];
+    } else {
+      yourPicksQuery = `SELECT p.*, u.display_name, u.primary_color
        FROM picks p
        JOIN users u ON p.user_id = u.id
        WHERE p.user_id = $1 AND p.league_id = $2
          AND p.game_id IN (
            SELECT id FROM games
            WHERE season_year = $3 AND week_number = $4
-         )`,
-      [userId, leagueId, year, week]
-    );
+         )`;
+      yourPicksParams = [userId, leagueId, year, week];
+    }
+    const yourPicksResult = await db.query(yourPicksQuery, yourPicksParams);
 
     const yourPicks = yourPicksResult.rows;
     const yourCorrect = yourPicks.filter(p => p.is_correct === true).length;
     const yourTotal = yourPicks.length;
 
     // Get your rank for this week
-    const rankResult = await db.query(
-      `WITH week_scores AS (
+    let rankQuery, rankParams;
+    if (weekType) {
+      rankQuery = `WITH week_scores AS (
+         SELECT
+           p.user_id,
+           COUNT(CASE WHEN p.is_correct = true THEN 1 END) as correct_picks,
+           COUNT(*) as total_picks
+         FROM picks p
+         JOIN games g ON p.game_id = g.id
+         WHERE g.season_year = $1 AND g.week_number = $2 AND g.week_type = $5
+           AND p.league_id = $3
+         GROUP BY p.user_id
+       )
+       SELECT
+         user_id,
+         RANK() OVER (ORDER BY correct_picks DESC) as rank,
+         COUNT(*) OVER () as total_users
+       FROM week_scores
+       WHERE user_id = $4`;
+      rankParams = [year, week, leagueId, userId, weekType];
+    } else {
+      rankQuery = `WITH week_scores AS (
          SELECT
            p.user_id,
            COUNT(CASE WHEN p.is_correct = true THEN 1 END) as correct_picks,
@@ -104,16 +148,41 @@ exports.handler = async (event, context) => {
          RANK() OVER (ORDER BY correct_picks DESC) as rank,
          COUNT(*) OVER () as total_users
        FROM week_scores
-       WHERE user_id = $4`,
-      [year, week, leagueId, userId]
-    );
+       WHERE user_id = $4`;
+      rankParams = [year, week, leagueId, userId];
+    }
+    const rankResult = await db.query(rankQuery, rankParams);
 
     const yourRank = rankResult.rows[0]?.rank || 0;
     const totalUsers = rankResult.rows[0]?.total_users || 0;
 
     // Get all other league members' picks for this week
-    const allPicksResult = await db.query(
-      `SELECT
+    let allPicksQuery, allPicksParams;
+    if (weekType) {
+      allPicksQuery = `SELECT
+         u.id as user_id,
+         u.display_name,
+         u.primary_color,
+         p.game_id,
+         p.predicted_winner,
+         p.is_correct,
+         g.winner,
+         g.home_team,
+         g.away_team
+       FROM league_members lm
+       JOIN users u ON lm.user_id = u.id
+       LEFT JOIN picks p ON u.id = p.user_id
+         AND p.league_id = $1
+         AND p.game_id IN (
+           SELECT id FROM games
+           WHERE season_year = $2 AND week_number = $3 AND week_type = $5
+         )
+       LEFT JOIN games g ON p.game_id = g.id
+       WHERE lm.league_id = $1 AND lm.user_id != $4
+       ORDER BY u.display_name, g.game_time`;
+      allPicksParams = [leagueId, year, week, userId, weekType];
+    } else {
+      allPicksQuery = `SELECT
          u.id as user_id,
          u.display_name,
          u.primary_color,
@@ -133,9 +202,10 @@ exports.handler = async (event, context) => {
          )
        LEFT JOIN games g ON p.game_id = g.id
        WHERE lm.league_id = $1 AND lm.user_id != $4
-       ORDER BY u.display_name, g.game_time`,
-      [leagueId, year, week, userId]
-    );
+       ORDER BY u.display_name, g.game_time`;
+      allPicksParams = [leagueId, year, week, userId];
+    }
+    const allPicksResult = await db.query(allPicksQuery, allPicksParams);
 
     // Group picks by user
     const userPicksMap = {};
@@ -259,8 +329,23 @@ exports.handler = async (event, context) => {
     let boldestCall = null;
     if (yourPicks.length > 0) {
       // Get league consensus for each game
-      const consensusResult = await db.query(
-        `SELECT
+      let consensusQuery, consensusParams;
+      if (weekType) {
+        consensusQuery = `SELECT
+           p.game_id,
+           p.predicted_winner,
+           COUNT(*) as pick_count,
+           COUNT(*) OVER (PARTITION BY p.game_id) as total_picks
+         FROM picks p
+         WHERE p.league_id = $1
+           AND p.game_id IN (
+             SELECT id FROM games
+             WHERE season_year = $2 AND week_number = $3 AND week_type = $4
+           )
+         GROUP BY p.game_id, p.predicted_winner`;
+        consensusParams = [leagueId, year, week, weekType];
+      } else {
+        consensusQuery = `SELECT
            p.game_id,
            p.predicted_winner,
            COUNT(*) as pick_count,
@@ -271,9 +356,10 @@ exports.handler = async (event, context) => {
              SELECT id FROM games
              WHERE season_year = $2 AND week_number = $3
            )
-         GROUP BY p.game_id, p.predicted_winner`,
-        [leagueId, year, week]
-      );
+         GROUP BY p.game_id, p.predicted_winner`;
+        consensusParams = [leagueId, year, week];
+      }
+      const consensusResult = await db.query(consensusQuery, consensusParams);
 
       const consensusMap = {};
       consensusResult.rows.forEach(row => {

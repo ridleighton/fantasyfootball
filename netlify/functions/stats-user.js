@@ -49,19 +49,28 @@ exports.handler = async (event, context) => {
       [userId, leagueId, year]
     );
 
-    // Get weekly stats
+    // Get weekly stats (including week_type for proper grouping)
     const weeklyResult = await db.query(
       `SELECT
         g.season_year,
         g.week_number,
+        g.week_type,
         COUNT(p.id) as total_picks,
         COUNT(CASE WHEN p.is_correct = true THEN 1 END) as correct_picks,
-        COUNT(CASE WHEN p.is_correct = false THEN 1 END) as incorrect_picks
+        COUNT(CASE WHEN p.is_correct = false THEN 1 END) as incorrect_picks,
+        CASE
+          WHEN g.week_type = 'regular' THEN 0
+          WHEN g.week_type = 'wildcard' THEN 1
+          WHEN g.week_type = 'divisional' THEN 2
+          WHEN g.week_type = 'conference' THEN 3
+          WHEN g.week_type = 'superbowl' THEN 4
+          ELSE 5
+        END as type_order
       FROM picks p
       JOIN games g ON p.game_id = g.id
       WHERE p.user_id = $1 AND p.league_id = $2 AND g.season_year = $3
-      GROUP BY g.season_year, g.week_number
-      ORDER BY g.season_year DESC, g.week_number DESC`,
+      GROUP BY g.season_year, g.week_number, g.week_type
+      ORDER BY g.season_year DESC, type_order DESC, g.week_number DESC`,
       [userId, leagueId, year]
     );
 
@@ -81,6 +90,7 @@ exports.handler = async (event, context) => {
           weekly: weeklyResult.rows.map(week => ({
             season_year: week.season_year,
             week_number: week.week_number,
+            week_type: week.week_type,
             total_picks: parseInt(week.total_picks),
             correct_picks: parseInt(week.correct_picks),
             incorrect_picks: parseInt(week.incorrect_picks)

@@ -8,9 +8,11 @@ const ComparisonPage = {
   state: {
     week: null,
     year: null,
+    weekType: null,
     leagueId: null,
     data: null,
-    loading: false
+    loading: false,
+    availableWeeks: []
   },
 
   /**
@@ -18,12 +20,21 @@ const ComparisonPage = {
    */
   async init() {
     // Get parameters from URL hash
-    // Format: #stats?week=5&year=2024&leagueId=1
+    // Format: #stats?week=5&year=2024&leagueId=1&weekType=regular
     const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
 
     this.state.week = parseInt(params.get('week')) || null;
     this.state.year = parseInt(params.get('year')) || new Date().getFullYear();
+    this.state.weekType = params.get('weekType') || null;
     this.state.leagueId = parseInt(params.get('leagueId')) || 1; // Default to league 1
+
+    // Fetch available weeks
+    try {
+      const weeksResponse = await API.games.getWeeks();
+      this.state.availableWeeks = weeksResponse.data;
+    } catch (error) {
+      console.error('Error fetching available weeks:', error);
+    }
 
     // If no week specified, get current week
     if (!this.state.week) {
@@ -31,10 +42,12 @@ const ComparisonPage = {
         const currentWeek = await API.games.getCurrentWeek();
         this.state.week = currentWeek.data.weekNumber;
         this.state.year = currentWeek.data.year;
+        this.state.weekType = currentWeek.data.weekType;
       } catch (error) {
         console.error('Error getting current week:', error);
         UI.showToast('Error loading current week', 'error');
         this.state.week = 1;
+        this.state.weekType = 'regular';
       }
     }
   },
@@ -60,11 +73,12 @@ const ComparisonPage = {
 
     try {
       // Fetch comparison data
-      console.log('[Comparison] Fetching comparison data for week', this.state.week, this.state.year);
+      console.log('[Comparison] Fetching comparison data for week', this.state.week, this.state.year, this.state.weekType);
       const response = await API.picks.compareWeek(
         this.state.week,
         this.state.year,
-        this.state.leagueId
+        this.state.leagueId,
+        this.state.weekType
       );
       console.log('[Comparison] API response:', response);
 
@@ -106,33 +120,53 @@ const ComparisonPage = {
   },
 
   /**
+   * Get display name for week type
+   */
+  getWeekDisplayName(weekType) {
+    const weekTypeNames = {
+      'regular': 'Regular Season',
+      'wildcard': 'Wild Card',
+      'divisional': 'Divisional',
+      'conference': 'Conference Championship',
+      'superbowl': 'Super Bowl'
+    };
+    return weekTypeNames[weekType] || weekType;
+  },
+
+  /**
    * Render week selector
    */
   renderWeekSelector() {
-    // Generate week options (weeks 1-18 for regular season)
-    const weeks = Array.from({ length: 18 }, (_, i) => i + 1);
+    // Use available weeks from API
+    const options = this.state.availableWeeks.map((week, index) => {
+      const isSelected = week.weekNumber === this.state.week &&
+                         week.weekType === this.state.weekType &&
+                         week.year === this.state.year;
+
+      let displayLabel;
+      if (week.weekType === 'regular') {
+        displayLabel = `Week ${week.weekNumber} (Regular Season) (${week.year})`;
+      } else {
+        displayLabel = `${this.getWeekDisplayName(week.weekType)} (${week.year})`;
+      }
+
+      return `<option value="${index}"
+                      data-week-number="${week.weekNumber}"
+                      data-year="${week.year}"
+                      data-week-type="${week.weekType}"
+                      ${isSelected ? 'selected' : ''}>
+                ${displayLabel}
+              </option>`;
+    }).join('');
 
     return `
       <div class="week-selector card">
         <div class="selector-group">
           <label for="comparison-week">Week:</label>
           <select id="comparison-week" class="form-input">
-            ${weeks.map(w => `
-              <option value="${w}" ${w === this.state.week ? 'selected' : ''}>
-                Week ${w}
-              </option>
-            `).join('')}
+            ${options}
           </select>
         </div>
-        <div class="selector-group">
-          <label for="comparison-year">Year:</label>
-          <select id="comparison-year" class="form-input">
-            ${this.renderYearOptions()}
-          </select>
-        </div>
-        <button id="refresh-comparison" class="btn btn-secondary">
-          Refresh
-        </button>
       </div>
     `;
   },
@@ -159,19 +193,15 @@ const ComparisonPage = {
     const weekSelect = container.querySelector('#comparison-week');
     if (weekSelect) {
       weekSelect.addEventListener('change', () => {
+        const selectedOption = weekSelect.options[weekSelect.selectedIndex];
+        this.state.week = parseInt(selectedOption.dataset.weekNumber);
+        this.state.year = parseInt(selectedOption.dataset.year);
+        this.state.weekType = selectedOption.dataset.weekType;
         this.updateUrl();
       });
     }
 
-    // Year selector change
-    const yearSelect = container.querySelector('#comparison-year');
-    if (yearSelect) {
-      yearSelect.addEventListener('change', () => {
-        this.updateUrl();
-      });
-    }
-
-    // Refresh button
+    // Refresh button (if exists)
     const refreshBtn = container.querySelector('#refresh-comparison');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', async () => {
@@ -184,16 +214,12 @@ const ComparisonPage = {
    * Update URL and reload
    */
   updateUrl() {
-    const weekSelect = document.querySelector('#comparison-week');
-    const yearSelect = document.querySelector('#comparison-year');
+    const leagueId = this.state.leagueId;
+    const week = this.state.week;
+    const year = this.state.year;
+    const weekType = this.state.weekType;
 
-    if (weekSelect && yearSelect) {
-      const week = weekSelect.value;
-      const year = yearSelect.value;
-      const leagueId = this.state.leagueId;
-
-      window.location.hash = `#stats?week=${week}&year=${year}&leagueId=${leagueId}`;
-    }
+    window.location.hash = `#stats?week=${week}&year=${year}&weekType=${weekType}&leagueId=${leagueId}`;
   },
 
   /**

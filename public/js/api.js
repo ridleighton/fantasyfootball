@@ -141,8 +141,10 @@ const API = {
       return API.request(`/picks/user/${userId}?week=${week}&leagueId=${leagueId}`);
     },
 
-    async compareWeek(week, year, leagueId) {
-      return API.request(`/picks/compare-week?week=${week}&year=${year}&leagueId=${leagueId}`);
+    async compareWeek(week, year, leagueId, weekType = null) {
+      let url = `/picks/compare-week?week=${week}&year=${year}&leagueId=${leagueId}`;
+      if (weekType) url += `&weekType=${weekType}`;
+      return API.request(url);
     },
   },
 
@@ -152,8 +154,11 @@ const API = {
       return API.request(`/leaderboard/season?leagueId=${leagueId}`);
     },
 
-    async getWeek(week, leagueId) {
-      return API.request(`/leaderboard/week?week=${week}&leagueId=${leagueId}`);
+    async getWeek(week, leagueId, year = null, weekType = null) {
+      let url = `/leaderboard/week?week=${week}&leagueId=${leagueId}`;
+      if (year) url += `&year=${year}`;
+      if (weekType) url += `&weekType=${weekType}`;
+      return API.request(url);
     },
   },
 

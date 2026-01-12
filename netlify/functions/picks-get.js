@@ -38,6 +38,7 @@ exports.handler = async (event, context) => {
     const week = parseInt(params.week);
     const year = parseInt(params.year) || new Date().getFullYear();
     const leagueId = parseInt(params.leagueId);
+    const weekType = params.weekType || params.week_type;
 
     if (!week || !leagueId) {
       return {
@@ -48,18 +49,34 @@ exports.handler = async (event, context) => {
 
     const db = await createClient();
 
-    const result = await db.query(
-      `SELECT p.id, p.user_id, p.game_id, p.league_id,
-              p.predicted_winner, p.is_correct, p.picked_at
-       FROM picks p
-       JOIN games g ON p.game_id = g.id
-       WHERE p.user_id = $1
-         AND p.league_id = $2
-         AND g.season_year = $3
-         AND g.week_number = $4
-       ORDER BY g.game_time`,
-      [userId, leagueId, year, week]
-    );
+    // Build query based on whether weekType is provided
+    let query, queryParams;
+    if (weekType) {
+      query = `SELECT p.id, p.user_id, p.game_id, p.league_id,
+                      p.predicted_winner, p.is_correct, p.picked_at
+               FROM picks p
+               JOIN games g ON p.game_id = g.id
+               WHERE p.user_id = $1
+                 AND p.league_id = $2
+                 AND g.season_year = $3
+                 AND g.week_number = $4
+                 AND g.week_type = $5
+               ORDER BY g.game_time`;
+      queryParams = [userId, leagueId, year, week, weekType];
+    } else {
+      query = `SELECT p.id, p.user_id, p.game_id, p.league_id,
+                      p.predicted_winner, p.is_correct, p.picked_at
+               FROM picks p
+               JOIN games g ON p.game_id = g.id
+               WHERE p.user_id = $1
+                 AND p.league_id = $2
+                 AND g.season_year = $3
+                 AND g.week_number = $4
+               ORDER BY g.game_time`;
+      queryParams = [userId, leagueId, year, week];
+    }
+
+    const result = await db.query(query, queryParams);
 
     return {
       statusCode: 200,

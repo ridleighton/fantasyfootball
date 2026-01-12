@@ -24,6 +24,7 @@ exports.handler = async (event, context) => {
     const week = parseInt(params.week);
     const year = parseInt(params.year) || new Date().getFullYear();
     const leagueId = parseInt(params.leagueId);
+    const weekType = params.weekType || params.week_type;
 
     if (!week || !leagueId) {
       return {
@@ -49,19 +50,35 @@ exports.handler = async (event, context) => {
     }
 
     // Get all picks for this week/league from all users
-    const result = await db.query(
-      `SELECT p.id, p.user_id, p.game_id, p.league_id,
-              p.predicted_winner, p.is_correct, p.picked_at,
-              u.username, u.display_name, u.primary_color
-       FROM picks p
-       JOIN games g ON p.game_id = g.id
-       JOIN users u ON p.user_id = u.id
-       WHERE p.league_id = $1
-         AND g.season_year = $2
-         AND g.week_number = $3
-       ORDER BY g.game_time, u.display_name`,
-      [leagueId, year, week]
-    );
+    let query, queryParams;
+    if (weekType) {
+      query = `SELECT p.id, p.user_id, p.game_id, p.league_id,
+                      p.predicted_winner, p.is_correct, p.picked_at,
+                      u.username, u.display_name, u.primary_color
+               FROM picks p
+               JOIN games g ON p.game_id = g.id
+               JOIN users u ON p.user_id = u.id
+               WHERE p.league_id = $1
+                 AND g.season_year = $2
+                 AND g.week_number = $3
+                 AND g.week_type = $4
+               ORDER BY g.game_time, u.display_name`;
+      queryParams = [leagueId, year, week, weekType];
+    } else {
+      query = `SELECT p.id, p.user_id, p.game_id, p.league_id,
+                      p.predicted_winner, p.is_correct, p.picked_at,
+                      u.username, u.display_name, u.primary_color
+               FROM picks p
+               JOIN games g ON p.game_id = g.id
+               JOIN users u ON p.user_id = u.id
+               WHERE p.league_id = $1
+                 AND g.season_year = $2
+                 AND g.week_number = $3
+               ORDER BY g.game_time, u.display_name`;
+      queryParams = [leagueId, year, week];
+    }
+
+    const result = await db.query(query, queryParams);
 
     await db.end();
 

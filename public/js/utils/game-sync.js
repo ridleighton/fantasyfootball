@@ -11,6 +11,32 @@ const GameSync = {
   isActive: false,
   currentWeek: null,
   currentYear: null,
+  currentWeekType: null,
+
+  /**
+   * Get display name for week type
+   */
+  getWeekDisplayName(weekType) {
+    const weekTypeNames = {
+      'regular': 'Regular Season',
+      'wildcard': 'Wild Card',
+      'divisional': 'Divisional',
+      'conference': 'Conference Championship',
+      'superbowl': 'Super Bowl'
+    };
+    return weekTypeNames[weekType] || weekType;
+  },
+
+  /**
+   * Get formatted week title
+   */
+  getWeekTitle() {
+    if (this.currentWeekType === 'regular') {
+      return `Week ${this.currentWeek}`;
+    } else {
+      return this.getWeekDisplayName(this.currentWeekType);
+    }
+  },
 
   /**
    * Start automatic syncing
@@ -28,14 +54,15 @@ const GameSync = {
       const weekResponse = await API.games.getCurrentWeek();
       this.currentWeek = weekResponse.data.weekNumber;
       this.currentYear = weekResponse.data.year;
-      console.log(`[GameSync] Current week: Week ${this.currentWeek}, ${this.currentYear}`);
+      this.currentWeekType = weekResponse.data.weekType;
+      console.log(`[GameSync] Current week: ${this.getWeekTitle()}, ${this.currentYear}`);
 
       // Check if there are active games
       const hasActiveGames = await this.checkForActiveGames();
       console.log(`[GameSync] Has active games: ${hasActiveGames}`);
 
       if (hasActiveGames) {
-        console.log(`[GameSync] ✓ Starting automatic game sync for Week ${this.currentWeek}, ${this.currentYear}`);
+        console.log(`[GameSync] ✓ Starting automatic game sync for ${this.getWeekTitle()}, ${this.currentYear}`);
         this.isActive = true;
 
         // Do an immediate sync
@@ -72,7 +99,7 @@ const GameSync = {
    */
   async checkForActiveGames() {
     try {
-      const response = await API.games.getGames(this.currentWeek, this.currentYear);
+      const response = await API.games.getGames(this.currentWeek, this.currentYear, this.currentWeekType);
       const games = response.data || [];
       console.log(`[GameSync] Checking ${games.length} games for activity`);
 
@@ -109,10 +136,10 @@ const GameSync = {
    */
   async syncGames() {
     try {
-      console.log(`[GameSync] 🔄 Syncing games for Week ${this.currentWeek}...`);
+      console.log(`[GameSync] 🔄 Syncing games for ${this.getWeekTitle()}...`);
 
       // Call the admin sync endpoint
-      const response = await API.admin.games.sync(this.currentWeek, this.currentYear);
+      const response = await API.admin.games.sync(this.currentWeek, this.currentYear, this.currentWeekType);
       console.log('[GameSync] Sync response:', response);
 
       if (response.data) {
@@ -160,6 +187,7 @@ const GameSync = {
       const weekResponse = await API.games.getCurrentWeek();
       this.currentWeek = weekResponse.data.weekNumber;
       this.currentYear = weekResponse.data.year;
+      this.currentWeekType = weekResponse.data.weekType;
 
       await this.syncGames();
 

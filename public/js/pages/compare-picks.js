@@ -50,12 +50,18 @@ const ComparePicksPage = {
       }
 
       // Only fetch current week if not already set (initial load)
-      if (!this.state.currentWeek || !this.state.currentWeekType) {
+      if (!this.state.currentWeek || !this.state.currentWeekType || !this.state.currentYear) {
         const weekResponse = await API.games.getCurrentWeek();
         this.state.currentWeek = weekResponse.data.weekNumber;
         this.state.currentYear = weekResponse.data.year;
         this.state.currentWeekType = weekResponse.data.weekType;
       }
+
+      console.log('[ComparePicksPage] State:', {
+        week: this.state.currentWeek,
+        year: this.state.currentYear,
+        weekType: this.state.currentWeekType
+      });
 
       // Fetch games for the selected week
       const gamesResponse = await API.games.getGames(
@@ -131,18 +137,18 @@ const ComparePicksPage = {
     const playoffWeeks = this.state.availableWeeks.filter(w => w.weekType !== 'regular');
 
     const regularOptions = regularWeeks.map(week => {
-      const isSelected = week.weekNumber === this.state.currentWeek &&
-                        week.weekType === this.state.currentWeekType &&
-                        week.seasonYear === this.state.currentYear;
+      const isSelected = Number(week.weekNumber) === Number(this.state.currentWeek) &&
+                        String(week.weekType) === String(this.state.currentWeekType) &&
+                        Number(week.seasonYear) === Number(this.state.currentYear);
       return `<option value="${week.seasonYear}-${week.weekNumber}-${week.weekType}" ${isSelected ? 'selected' : ''}>
         Week ${week.weekNumber} (${week.seasonYear})
       </option>`;
     }).join('');
 
     const playoffOptions = playoffWeeks.map(week => {
-      const isSelected = week.weekNumber === this.state.currentWeek &&
-                        week.weekType === this.state.currentWeekType &&
-                        week.seasonYear === this.state.currentYear;
+      const isSelected = Number(week.weekNumber) === Number(this.state.currentWeek) &&
+                        String(week.weekType) === String(this.state.currentWeekType) &&
+                        Number(week.seasonYear) === Number(this.state.currentYear);
       const displayName = this.getWeekDisplayName(week.weekType, week.weekNumber);
       return `<option value="${week.seasonYear}-${week.weekNumber}-${week.weekType}" ${isSelected ? 'selected' : ''}>
         ${displayName} (${week.seasonYear})
@@ -284,10 +290,20 @@ const ComparePicksPage = {
 
     if (weekDropdown) {
       weekDropdown.addEventListener('change', async (e) => {
-        const [year, weekNumber, weekType] = e.target.value.split('-');
+        const parts = e.target.value.split('-');
+        const year = parts[0];
+        const weekNumber = parts[1];
+        const weekType = parts.slice(2).join('-'); // Handle week types that might have dashes
+
         this.state.currentYear = parseInt(year);
         this.state.currentWeek = parseInt(weekNumber);
         this.state.currentWeekType = weekType;
+
+        console.log('[ComparePicksPage] Dropdown changed:', {
+          value: e.target.value,
+          parsed: { year, weekNumber, weekType }
+        });
+
         await this.render(container);
       });
     }

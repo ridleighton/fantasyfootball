@@ -139,19 +139,19 @@ const ComparePicksPage = {
     const regularOptions = regularWeeks.map(week => {
       const isSelected = Number(week.weekNumber) === Number(this.state.currentWeek) &&
                         String(week.weekType) === String(this.state.currentWeekType) &&
-                        Number(week.seasonYear) === Number(this.state.currentYear);
-      return `<option value="${week.seasonYear}-${week.weekNumber}-${week.weekType}" ${isSelected ? 'selected' : ''}>
-        Week ${week.weekNumber} (${week.seasonYear})
+                        Number(week.year) === Number(this.state.currentYear);
+      return `<option value="${week.year}-${week.weekNumber}-${week.weekType}" ${isSelected ? 'selected' : ''}>
+        Week ${week.weekNumber} (${week.year})
       </option>`;
     }).join('');
 
     const playoffOptions = playoffWeeks.map(week => {
       const isSelected = Number(week.weekNumber) === Number(this.state.currentWeek) &&
                         String(week.weekType) === String(this.state.currentWeekType) &&
-                        Number(week.seasonYear) === Number(this.state.currentYear);
+                        Number(week.year) === Number(this.state.currentYear);
       const displayName = this.getWeekDisplayName(week.weekType, week.weekNumber);
-      return `<option value="${week.seasonYear}-${week.weekNumber}-${week.weekType}" ${isSelected ? 'selected' : ''}>
-        ${displayName} (${week.seasonYear})
+      return `<option value="${week.year}-${week.weekNumber}-${week.weekType}" ${isSelected ? 'selected' : ''}>
+        ${displayName} (${week.year})
       </option>`;
     }).join('');
 

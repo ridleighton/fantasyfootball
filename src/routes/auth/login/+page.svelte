@@ -10,6 +10,8 @@
   let password = $state('');
   let error = $state('');
   let loading = $state(false);
+  let resetSent = $state(false);
+  let showReset = $state(false);
 
   const redirect = $derived($page.url.searchParams.get('redirect') ?? '/');
 
@@ -23,6 +25,24 @@
       goto(redirect);
     } catch (err) {
       error = err.message ?? 'Invalid email or password';
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleReset(e) {
+    e.preventDefault();
+    if (!email) { error = 'Enter your email above first'; return; }
+    error = '';
+    loading = true;
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`
+      });
+      if (err) throw err;
+      resetSent = true;
+    } catch (err) {
+      error = err.message ?? 'Failed to send reset email';
     } finally {
       loading = false;
     }
@@ -65,6 +85,18 @@
           {loading ? 'Signing in…' : 'Sign in →'}
         </button>
       </form>
+
+      {#if resetSent}
+        <p style="color:var(--good);font-size:13px;font-weight:600;margin-top:16px;text-align:center">
+          Check your email for a reset link.
+        </p>
+      {:else}
+        <p style="text-align:center;margin-top:16px;font-size:12px">
+          <button class="db-link" onclick={handleReset} disabled={loading}>
+            Forgot password?
+          </button>
+        </p>
+      {/if}
     </div>
 
     <p class="db-sub" style="text-align:center;margin-top:24px;font-size:11px">

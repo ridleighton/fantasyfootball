@@ -651,6 +651,14 @@ select.db-input {
 
 .db-btn.primary:hover { box-shadow: 0 8px 20px -8px var(--accent); filter: brightness(1.05); }
 
+.db-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: inherit; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.db-link:hover { opacity: .8; }
+.db-link:disabled { opacity: .5; cursor: default; }
+
 .db-btn.lg {
   height: 48px;
   padding: 0 22px;

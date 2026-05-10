@@ -1,94 +1,88 @@
 /**
- * Navbar Component
- *
- * Top navigation bar (desktop) and bottom navigation (mobile)
+ * Navbar — down bad redesign
+ * Desktop sticky top bar + mobile floating tab bar
  */
 
 const Navbar = {
   state: {
     activePage: 'home',
-    mobileMenuOpen: false
   },
 
-  /**
-   * Initialize the navbar
-   */
   init() {
     const navContainer = document.getElementById('navigation');
-    if (!navContainer) {
-      console.log('[Navbar] Navigation container not found');
-      return;
-    }
+    if (!navContainer) return;
 
     const user = Auth.currentUser;
     const isAdmin = Auth.isAdmin();
-    console.log('[Navbar] Initializing navbar:', { user, isAdmin });
+    const displayName = user.displayName || user.display_name || 'you';
+    const initial = displayName.charAt(0).toUpperCase();
+
+    const links = [
+      { id: 'home',          label: 'Home',       href: '#' },
+      { id: 'picks',         label: "Pick'ems",   href: '#picks' },
+      { id: 'compare-picks', label: 'Compare',    href: '#compare-picks' },
+    ];
+
+    if (isAdmin) {
+      links.push({ id: 'admin', label: 'Admin', href: '#admin' });
+    }
+
+    const navLinks = links.map(l => `
+      <a class="db-nav-link" data-page="${l.id}" href="${l.href}">${l.label}</a>
+    `).join('');
+
+    const mobileTabIcons = {
+      home:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+      picks:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>`,
+      'compare-picks': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+      profile:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    };
+
+    const mobileTabs = [
+      { id: 'home',          label: 'Home' },
+      { id: 'picks',         label: 'Picks' },
+      { id: 'compare-picks', label: 'Compare' },
+      { id: 'profile',       label: 'Profile' },
+    ].map(t => `
+      <button class="db-mobile-tab" data-page="${t.id}">
+        ${mobileTabIcons[t.id] || ''}
+        <span>${t.label}</span>
+      </button>
+    `).join('');
 
     navContainer.innerHTML = `
-      <!-- Navbar -->
+      <!-- Desktop nav -->
       <nav class="navbar">
-        <div class="navbar-content">
-          <div class="navbar-logo">
-            NFL Pick'ems
-          </div>
-
-          <!-- Desktop Links -->
-          <div class="navbar-links desktop-only">
-            <a href="#" class="navbar-link" data-page="home">Home</a>
-            <a href="#picks" class="navbar-link" data-page="picks">Picks</a>
-            <a href="#compare-picks" class="navbar-link" data-page="compare-picks">Compare</a>
-            ${isAdmin ? '<a href="#admin" class="navbar-link" data-page="admin">Admin</a>' : ''}
-          </div>
-
-          <div class="navbar-actions">
-            <!-- Mobile Hamburger -->
-            <button class="hamburger-btn mobile-only" id="hamburger-btn" aria-label="Toggle menu">
-              <span class="hamburger-line"></span>
-              <span class="hamburger-line"></span>
-              <span class="hamburger-line"></span>
-            </button>
-
-            <!-- Desktop Actions -->
-            <div class="desktop-only" style="display: flex; align-items: center; gap: 1rem;">
-              <a href="#profile" class="navbar-link">
-                <div class="user-avatar-small" style="background-color: ${user.primaryColor || user.primary_color || '#8AB4F8'}; color: ${Colors.getContrastColor(user.primaryColor || user.primary_color || '#8AB4F8')};">
-                  ${(user.displayName || user.display_name).charAt(0).toUpperCase()}
-                </div>
-              </a>
-              <button class="btn btn-text" id="logout-btn">Logout</button>
-            </div>
-          </div>
+        <div class="db-brand" data-page="home">
+          <span class="db-brand-mark">👻</span>
+          <span>down bad</span>
         </div>
-
-        <!-- Mobile Menu -->
-        <div class="mobile-menu" id="mobile-menu">
-          <div class="mobile-menu-header">
-            <div class="user-info">
-              <div class="user-avatar-small" style="background-color: ${user.primaryColor || user.primary_color || '#8AB4F8'}; color: ${Colors.getContrastColor(user.primaryColor || user.primary_color || '#8AB4F8')};">
-                ${(user.displayName || user.display_name).charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div class="user-name">${user.displayName || user.display_name}</div>
-                <div class="user-username">@${user.username}</div>
-              </div>
-            </div>
-          </div>
-          <div class="mobile-menu-links">
-            <a href="#" class="mobile-menu-link" data-page="home">Home</a>
-            <a href="#picks" class="mobile-menu-link" data-page="picks">Picks</a>
-            <a href="#compare-picks" class="mobile-menu-link" data-page="compare-picks">Compare</a>
-            <a href="#profile" class="mobile-menu-link" data-page="profile">Profile</a>
-            ${isAdmin ? '<a href="#admin" class="mobile-menu-link" data-page="admin">Admin</a>' : ''}
-          </div>
-          <div class="mobile-menu-footer">
-            <button class="btn btn-secondary" id="mobile-logout-btn" style="width: 100%;">Logout</button>
-          </div>
+        ${navLinks}
+        <div class="db-nav-spacer"></div>
+        <div class="db-nav-right">
+          <button class="db-theme-btn" id="db-theme-toggle" title="Toggle light/dark">☀</button>
+          <a href="#profile" class="db-nav-user" data-page="profile">
+            <span class="db-avatar" id="db-nav-avatar">${initial}</span>
+            <span id="db-nav-name">${displayName}</span>
+          </a>
+          <button class="db-btn" id="db-logout-btn" style="height:32px;padding:0 12px;font-size:12px;">Sign out</button>
         </div>
       </nav>
+
+      <!-- Mobile tab bar -->
+      <div class="db-mobile-nav" id="db-mobile-nav">
+        ${mobileTabs}
+      </div>
     `;
 
-    // Attach event listeners
-    const logoutBtn = document.getElementById('logout-btn');
+    this._attachListeners(user);
+    this.setActive(this.state.activePage);
+    this._applyUserColor(user);
+  },
+
+  _attachListeners(user) {
+    // Logout
+    const logoutBtn = document.getElementById('db-logout-btn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', async () => {
         await Auth.logout();
@@ -96,90 +90,60 @@ const Navbar = {
       });
     }
 
-    const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
-    if (mobileLogoutBtn) {
-      mobileLogoutBtn.addEventListener('click', async () => {
-        await Auth.logout();
-        window.location.href = '/';
+    // Theme toggle
+    const themeBtn = document.getElementById('db-theme-toggle');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => {
+        const html = document.documentElement;
+        const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('db-theme', next);
+        themeBtn.textContent = next === 'dark' ? '☀' : '🌙';
       });
+      // Set initial icon
+      const current = document.documentElement.getAttribute('data-theme');
+      themeBtn.textContent = current === 'dark' ? '☀' : '🌙';
     }
 
-    // Hamburger menu toggle
-    const hamburgerBtn = document.getElementById('hamburger-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    if (hamburgerBtn && mobileMenu) {
-      hamburgerBtn.addEventListener('click', () => {
-        this.toggleMobileMenu();
-      });
-
-      // Close menu when clicking on a link
-      document.querySelectorAll('.mobile-menu-link').forEach(link => {
-        link.addEventListener('click', () => {
-          this.closeMobileMenu();
-        });
-      });
-
-      // Close menu when clicking outside
-      document.addEventListener('click', (e) => {
-        if (this.state.mobileMenuOpen &&
-            !mobileMenu.contains(e.target) &&
-            !hamburgerBtn.contains(e.target)) {
-          this.closeMobileMenu();
+    // Brand / desktop nav clicks
+    document.querySelectorAll('[data-page]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const page = el.dataset.page;
+        if (page === 'home') {
+          e.preventDefault();
+          this.setActive('home');
+          window.Router && Router.navigate('home');
         }
       });
+    });
+
+    // Mobile tabs
+    document.querySelectorAll('.db-mobile-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const page = tab.dataset.page;
+        this.setActive(page);
+        window.Router && Router.navigate(page);
+      });
+    });
+  },
+
+  _applyUserColor(user) {
+    const color = user.primaryColor || user.primary_color;
+    if (!color) return;
+    const avatar = document.getElementById('db-nav-avatar');
+    if (avatar) {
+      avatar.style.background = color;
+      avatar.style.color = window.Colors ? Colors.getContrastColor(color) : '#fff';
     }
-
-    // Set active page
-    this.setActive(this.state.activePage);
   },
 
-  toggleMobileMenu() {
-    this.state.mobileMenuOpen = !this.state.mobileMenuOpen;
-    const mobileMenu = document.getElementById('mobile-menu');
-    const hamburgerBtn = document.getElementById('hamburger-btn');
-
-    if (this.state.mobileMenuOpen) {
-      mobileMenu.classList.add('open');
-      hamburgerBtn.classList.add('open');
-    } else {
-      mobileMenu.classList.remove('open');
-      hamburgerBtn.classList.remove('open');
-    }
-  },
-
-  closeMobileMenu() {
-    this.state.mobileMenuOpen = false;
-    const mobileMenu = document.getElementById('mobile-menu');
-    const hamburgerBtn = document.getElementById('hamburger-btn');
-    if (mobileMenu) mobileMenu.classList.remove('open');
-    if (hamburgerBtn) hamburgerBtn.classList.remove('open');
-  },
-
-  /**
-   * Set active page indicator
-   */
   setActive(pageName) {
     this.state.activePage = pageName;
 
-    // Update navbar links
-    document.querySelectorAll('.navbar-link').forEach(link => {
-      if (link.dataset.page === pageName) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
-    });
-
-    // Update mobile menu links
-    document.querySelectorAll('.mobile-menu-link').forEach(link => {
-      if (link.dataset.page === pageName) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
+    document.querySelectorAll('.db-nav-link, .db-mobile-tab').forEach(el => {
+      el.classList.toggle('active', el.dataset.page === pageName);
     });
   }
 };
 
-// Make globally available
 window.Navbar = Navbar;

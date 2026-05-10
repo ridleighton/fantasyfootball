@@ -1,0 +1,119 @@
+<script>
+  import '../app.css';
+  import { page } from '$app/stores';
+  import { createSupabaseBrowserClient } from '$lib/supabase.js';
+  import { goto, invalidate } from '$app/navigation';
+
+  let { data, children } = $props();
+
+  const supabase = createSupabaseBrowserClient(data.supabase.url, data.supabase.anonKey);
+
+  // Apply user theme colors as CSS vars
+  $effect(() => {
+    const color = data.profile?.primary_color ?? '#ff5db1';
+    const secondary = data.profile?.secondary_color ?? '#b06bff';
+    document.documentElement.style.setProperty('--user-primary', color);
+    document.documentElement.style.setProperty('--user-secondary', secondary);
+  });
+
+  // Keep session in sync on client navigation
+  $effect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        invalidate('supabase:auth');
+      }
+    });
+    return () => subscription.unsubscribe();
+  });
+
+  const navLinks = [
+    { href: '/',        label: 'Home',    match: (p) => p === '/' },
+    { href: '/picks',   label: "Pick'ems", match: (p) => p.startsWith('/picks') },
+    { href: '/games',   label: 'Games',   match: (p) => p.startsWith('/games') },
+    { href: '/compare', label: 'Compare', match: (p) => p.startsWith('/compare') },
+  ];
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    goto('/auth/login');
+  }
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('db-theme', next);
+  }
+
+  const displayName = $derived(data.profile?.display_name ?? '');
+  const initial = $derived(displayName.charAt(0).toUpperCase() || '?');
+</script>
+
+<svelte:head>
+  <title>down bad ↓</title>
+</svelte:head>
+
+<!-- Restore saved theme on load -->
+<svelte:window onload={() => {
+  const saved = localStorage.getItem('db-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+}} />
+
+<!-- Desktop navbar -->
+{#if data.session}
+  <nav class="navbar">
+    <a href="/" class="db-brand">
+      <span class="db-brand-mark">👻</span>
+      <span>down bad</span>
+    </a>
+
+    {#each navLinks as link}
+      <a href={link.href} class="db-nav-link" class:active={link.match($page.url.pathname)}>
+        {link.label}
+      </a>
+    {/each}
+
+    {#if data.profile?.is_admin || data.profile?.is_commissioner}
+      <a href="/admin" class="db-nav-link" class:active={$page.url.pathname.startsWith('/admin')}>
+        Admin
+      </a>
+    {/if}
+
+    <span class="db-nav-spacer"></span>
+
+    <div class="db-nav-right">
+      <button class="db-theme-btn" onclick={toggleTheme} aria-label="Toggle theme">☀</button>
+      <a href="/profile" class="db-nav-user">
+        <span class="db-avatar" style="background:{data.profile?.primary_color ?? 'var(--avatar-bg)'}">
+          {initial}
+        </span>
+        <span>{displayName}</span>
+      </a>
+      <button class="db-btn" onclick={signOut} style="height:32px;padding:0 12px;font-size:12px">
+        Sign out
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile tab bar -->
+  <div class="db-mobile-nav">
+    {#each navLinks as link}
+      <a href={link.href} class="db-mobile-tab" class:active={link.match($page.url.pathname)}>
+        <span style="font-size:18px">{link.href === '/' ? '🏠' : link.href === '/picks' ? '🏈' : link.href === '/games' ? '📅' : '📊'}</span>
+        <span>{link.label}</span>
+      </a>
+    {/each}
+    <a href="/profile" class="db-mobile-tab" class:active={$page.url.pathname.startsWith('/profile')}>
+      <span style="font-size:18px">👤</span>
+      <span>Profile</span>
+    </a>
+  </div>
+{/if}
+
+<main>
+  {@render children()}
+</main>
+
+<footer class="db-footer">
+  not affiliated with ghost energy, taylor swift, the nfl, or anyone referenced on this site. just big fans of all of them.
+</footer>

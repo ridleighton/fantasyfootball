@@ -122,44 +122,33 @@ const App = {
   showLoginPage() {
     const app = document.getElementById('app');
     app.innerHTML = `
-      <div class="login-container">
-        <div class="login-card">
-          <div class="login-header">
-            <h1 class="login-title">🏈 NFL Pick'ems</h1>
-            <p class="login-subtitle">Sign in to make your picks</p>
+      <div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:24px">
+        <div style="width:100%;max-width:380px">
+          <!-- brand -->
+          <div style="text-align:center;margin-bottom:32px">
+            <div style="width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:28px;display:grid;place-items:center;margin:0 auto 12px">👻</div>
+            <h1 style="font-size:28px;font-weight:800;font-style:italic;letter-spacing:-.025em;margin:0 0 4px;color:var(--ink)">down bad ↓</h1>
+            <p style="color:var(--ink-soft);font-size:13px;margin:0">sign in to make your picks</p>
           </div>
-          
-          <form id="login-form" class="login-form">
-            <div class="form-group">
-              <label class="form-label" for="username">Username</label>
-              <input 
-                type="text" 
-                id="username" 
-                class="form-input" 
-                placeholder="Enter your username"
-                required
-                autocomplete="username"
-              >
-            </div>
-            
-            <div class="form-group">
-              <label class="form-label" for="password">Password</label>
-              <input 
-                type="password" 
-                id="password" 
-                class="form-input" 
-                placeholder="Enter your password"
-                required
-                autocomplete="current-password"
-              >
-            </div>
-            
-            <div id="login-error" class="form-error hidden"></div>
-            
-            <button type="submit" class="btn btn-primary">
-              Sign In
-            </button>
-          </form>
+
+          <div class="db-card" style="padding:24px">
+            <form id="login-form">
+              <div style="margin-bottom:14px">
+                <label class="db-label">Username</label>
+                <input type="text" id="username" class="db-input" placeholder="your username" required autocomplete="username">
+              </div>
+              <div style="margin-bottom:16px">
+                <label class="db-label">Password</label>
+                <input type="password" id="password" class="db-input" placeholder="••••••••" required autocomplete="current-password">
+              </div>
+              <div id="login-error" style="display:none;color:var(--bad);font-size:13px;font-weight:600;margin-bottom:12px;padding:10px 14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--bad)"></div>
+              <button type="submit" class="db-btn primary lg" style="width:100%;justify-content:center">Sign in →</button>
+            </form>
+          </div>
+
+          <p style="text-align:center;margin-top:24px;color:var(--ink-mute);font-size:11px">
+            not affiliated with ghost energy, taylor swift, the nfl, or anyone referenced on this site.
+          </p>
         </div>
       </div>
     `;
@@ -178,12 +167,12 @@ const App = {
     const password = document.getElementById('password').value;
     const errorEl = document.getElementById('login-error');
 
-    errorEl.classList.add('hidden');
+    errorEl.style.display = 'none';
     errorEl.textContent = '';
 
     if (!username || !password) {
       errorEl.textContent = 'Please enter both username and password';
-      errorEl.classList.remove('hidden');
+      errorEl.style.display = 'block';
       return;
     }
 
@@ -194,13 +183,12 @@ const App = {
       await Auth.login(username, password);
       console.log('[App] Login successful, reloading app...');
 
-      // Reload app after successful login
       window.location.href = '/';
 
     } catch (error) {
       console.error('[App] Login error:', error);
       errorEl.textContent = error.message || 'Invalid username or password';
-      errorEl.classList.remove('hidden');
+      errorEl.style.display = 'block';
       UI.hideLoading();
     }
   },
@@ -274,12 +262,22 @@ const App = {
 
 // UI Helper functions
 const UI = {
-  showLoading() {
-    document.getElementById('loading-spinner').classList.remove('hidden');
+  showLoading(text) {
+    if (window.showLoading) {
+      window.showLoading(text);
+    } else {
+      const el = document.getElementById('db-loading');
+      if (el) el.style.display = 'grid';
+    }
   },
-  
+
   hideLoading() {
-    document.getElementById('loading-spinner').classList.add('hidden');
+    if (window.hideLoading) {
+      window.hideLoading();
+    } else {
+      const el = document.getElementById('db-loading');
+      if (el) el.style.display = 'none';
+    }
   },
   
   showToast(message, type = 'info', duration = 3000) {

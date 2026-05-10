@@ -4,6 +4,7 @@
 
   let { data } = $props();
   const supabase = createSupabaseBrowserClient(data.supabase.url, data.supabase.anonKey);
+  const linkError = data.linkError;
 
   let password = $state('');
   let confirm = $state('');
@@ -41,10 +42,18 @@
     </div>
 
     <div class="db-card" style="padding:24px">
-      {#if done}
+      {#if linkError}
+        <div style="color:var(--bad);font-size:14px;font-weight:600;text-align:center;margin-bottom:16px">
+          {linkError}
+        </div>
+        <a href="/auth/login" class="db-btn primary lg" style="width:100%;justify-content:center;text-decoration:none;display:flex">
+          Back to login →
+        </a>
+      {:else if done}
         <p style="color:var(--good);font-weight:700;text-align:center">Password updated! Redirecting…</p>
       {:else}
         <form onsubmit={handleSubmit}>
+          <input type="text" name="username" autocomplete="username" style="display:none" aria-hidden="true" />
           <div style="margin-bottom:14px">
             <label class="db-label" for="password">New password</label>
             <input id="password" type="password" class="db-input" placeholder="••••••••"

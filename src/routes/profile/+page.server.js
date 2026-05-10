@@ -25,7 +25,7 @@ export const actions = {
       const result = await db.query(
         `UPDATE users
          SET display_name = $1, primary_color = $2, secondary_color = $3,
-             timezone = $4, updated_at = NOW()
+             timezone = $4
          WHERE id = $5
          RETURNING id, display_name, primary_color, secondary_color, timezone`,
         [displayName, primaryColor || null, secondaryColor || null, timezone || null, profile.id]

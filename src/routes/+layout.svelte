@@ -39,7 +39,7 @@
     { href: '/',        label: 'Home',    icon: '🏠', match: (p) => p === '/' },
     { href: '/picks',   label: "Pick'ems", icon: '🏈', match: (p) => p.startsWith('/picks') || p.startsWith('/games') },
     { href: '/trivia',  label: 'Trivia',  icon: '🧠', match: (p) => p.startsWith('/trivia') },
-    { href: '/compare', label: 'Compare', icon: '📊', match: (p) => p.startsWith('/compare') },
+    { href: '/league',  label: 'League',  icon: '🏆', match: (p) => p.startsWith('/league') },
   ];
 
   async function signOut() {
@@ -113,7 +113,7 @@
       </div>
     </div>
 
-    <a href="/compare" class="db-nav-link" class:active={$page.url.pathname.startsWith('/compare')}>Compare</a>
+    <a href="/league" class="db-nav-link" class:active={$page.url.pathname.startsWith('/league')}>The League</a>
 
     {#if data.profile?.is_admin || data.profile?.is_commissioner}
       <a href="/admin" class="db-nav-link" class:active={$page.url.pathname.startsWith('/admin')}>Admin</a>

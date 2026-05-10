@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "db:migrate": "node --env-file=.env scripts/migrate-schema.js",
-    "db:migrate-users": "node --env-file=.env scripts/migrate-users.js"
+    "db:migrate-users": "node --env-file=.env scripts/migrate-users.js",
+    "db:migrate-trivia": "node --env-file=.env scripts/migrate-trivia.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

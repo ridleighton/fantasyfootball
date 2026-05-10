@@ -16,6 +16,15 @@
     document.documentElement.style.setProperty('--user-secondary', secondary);
   });
 
+  // Sync theme preference from profile (handles cross-device consistency)
+  $effect(() => {
+    const pref = data.profile?.theme_preference;
+    if (pref) {
+      document.documentElement.setAttribute('data-theme', pref);
+      localStorage.setItem('db-theme', pref);
+    }
+  });
+
   // Keep session in sync on client navigation
   $effect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -28,8 +37,8 @@
 
   const mobileLinks = [
     { href: '/',        label: 'Home',    icon: '🏠', match: (p) => p === '/' },
-    { href: '/picks',   label: "Pick'ems", icon: '🏈', match: (p) => p.startsWith('/picks') },
-    { href: '/games',   label: 'Games',   icon: '📅', match: (p) => p.startsWith('/games') },
+    { href: '/picks',   label: "Pick'ems", icon: '🏈', match: (p) => p.startsWith('/picks') || p.startsWith('/games') },
+    { href: '/trivia',  label: 'Trivia',  icon: '🧠', match: (p) => p.startsWith('/trivia') },
     { href: '/compare', label: 'Compare', icon: '📊', match: (p) => p.startsWith('/compare') },
   ];
 
@@ -38,11 +47,19 @@
     goto('/auth/login');
   }
 
-  function toggleTheme() {
+  async function toggleTheme() {
     const html = document.documentElement;
     const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     localStorage.setItem('db-theme', next);
+    // Persist to profile so preference follows the user across devices
+    try {
+      await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themePreference: next })
+      });
+    } catch { /* non-critical */ }
   }
 
   const displayName = $derived(data.profile?.display_name ?? '');
@@ -53,11 +70,6 @@
   <title>down bad ↓</title>
 </svelte:head>
 
-<!-- Restore saved theme on load -->
-<svelte:window onload={() => {
-  const saved = localStorage.getItem('db-theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
-}} />
 
 <!-- Desktop navbar -->
 {#if data.session}
@@ -76,6 +88,7 @@
       <div class="db-dropdown">
         <a href="/picks" class="db-dropdown-item" class:active={$page.url.pathname === '/picks'}>Picks</a>
         <a href="/picks/record" class="db-dropdown-item" class:active={$page.url.pathname === '/picks/record'}>Record</a>
+        <a href="/games" class="db-dropdown-item" class:active={$page.url.pathname === '/games'}>Results</a>
         {#if data.availableYears?.length > 0}
           <div class="db-dropdown-divider"></div>
           {#each data.availableYears as year}
@@ -87,13 +100,16 @@
     </div>
 
     <div class="db-nav-group">
-      <a href="/games" class="db-nav-link" class:active={$page.url.pathname.startsWith('/games')}>
-        Games ▾
+      <a href="/trivia" class="db-nav-link" class:active={$page.url.pathname.startsWith('/trivia')}>
+        Trivia ▾
       </a>
       <div class="db-dropdown">
-        <a href="/games" class="db-dropdown-item" class:active={$page.url.pathname === '/games'}>Today's Game</a>
-        <a href="/games?browse=1" class="db-dropdown-item">More Games</a>
-        <a href="/games/history" class="db-dropdown-item" class:active={$page.url.pathname === '/games/history'}>History</a>
+        <a href="/trivia" class="db-dropdown-item" class:active={$page.url.pathname === '/trivia'}>Play</a>
+        <a href="/trivia/history" class="db-dropdown-item" class:active={$page.url.pathname === '/trivia/history'}>History</a>
+        {#if data.profile?.is_admin}
+          <div class="db-dropdown-divider"></div>
+          <a href="/trivia/admin" class="db-dropdown-item" class:active={$page.url.pathname.startsWith('/trivia/admin')}>Admin</a>
+        {/if}
       </div>
     </div>
 

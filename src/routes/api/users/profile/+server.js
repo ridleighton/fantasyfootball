@@ -35,15 +35,16 @@ export async function PUT({ request, cookies }) {
     if (!userId) throw error(401, 'Unauthorized');
 
     const body = await request.json();
-    const { displayName, primaryColor, secondaryColor, timezone } = body;
+    const { displayName, primaryColor, secondaryColor, timezone, themePreference } = body;
 
     const updates = [];
     const values = [];
     let i = 1;
-    if (displayName !== undefined) { updates.push(`display_name = $${i++}`); values.push(displayName); }
-    if (primaryColor !== undefined) { updates.push(`primary_color = $${i++}`); values.push(primaryColor); }
-    if (secondaryColor !== undefined) { updates.push(`secondary_color = $${i++}`); values.push(secondaryColor); }
-    if (timezone !== undefined) { updates.push(`timezone = $${i++}`); values.push(timezone); }
+    if (displayName !== undefined)      { updates.push(`display_name = $${i++}`);       values.push(displayName); }
+    if (primaryColor !== undefined)     { updates.push(`primary_color = $${i++}`);      values.push(primaryColor); }
+    if (secondaryColor !== undefined)   { updates.push(`secondary_color = $${i++}`);    values.push(secondaryColor); }
+    if (timezone !== undefined)         { updates.push(`timezone = $${i++}`);           values.push(timezone); }
+    if (themePreference !== undefined)  { updates.push(`theme_preference = $${i++}`);   values.push(themePreference); }
 
     if (updates.length === 0) throw error(400, 'No fields to update');
 

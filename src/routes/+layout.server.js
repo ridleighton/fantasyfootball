@@ -26,7 +26,7 @@ export async function load({ cookies }) {
 
       let result = await db.query(
         `SELECT id, username, display_name, is_admin, is_commissioner,
-                primary_color, secondary_color, timezone
+                primary_color, secondary_color, timezone, theme_preference
          FROM users WHERE supabase_uid = $1`,
         [session.user.id]
       );
@@ -41,7 +41,7 @@ export async function load({ cookies }) {
            VALUES ($1, $2, $3, false)
            ON CONFLICT (supabase_uid) DO UPDATE SET username = EXCLUDED.username
            RETURNING id, username, display_name, is_admin, is_commissioner,
-                     primary_color, secondary_color, timezone`,
+                     primary_color, secondary_color, timezone, theme_preference`,
           [email, displayName, session.user.id]
         );
 

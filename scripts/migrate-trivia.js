@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-/**
- * Run once: creates trivia tables and seed data.
- */
-const { Client } = require('pg');
+import pg from 'pg';
+const { Client } = pg;
 
 const url = process.env.DATABASE_URL ?? '';
 const db = new Client({

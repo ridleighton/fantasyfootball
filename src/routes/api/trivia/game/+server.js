@@ -4,7 +4,7 @@ import { serverSupabase } from '$lib/server/auth.js';
 
 async function getUser(cookies, db) {
   const supabase = serverSupabase(cookies);
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data } = await supabase.auth.getSession(); const session = data?.session;
   if (!session) return null;
   const res = await db.query('SELECT id FROM users WHERE supabase_uid = $1', [session.user.id]);
   return res.rows[0] ?? null;

@@ -3,11 +3,16 @@ import { createClient } from '$lib/server/db.js';
 import { serverSupabase } from '$lib/server/auth.js';
 
 async function getUserId(cookies, db) {
-  const supabase = serverSupabase(cookies);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
-  const res = await db.query('SELECT id FROM users WHERE supabase_uid = $1', [session.user.id]);
-  return res.rows[0]?.id ?? null;
+  try {
+    const supabase = serverSupabase(cookies);
+    const { data } = await supabase.auth.getSession();
+    const session = data?.session;
+    if (!session) return null;
+    const res = await db.query('SELECT id FROM users WHERE supabase_uid = $1', [session.user.id]);
+    return res.rows[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET({ cookies }) {
@@ -48,7 +53,6 @@ export async function PUT({ request, cookies }) {
 
     if (updates.length === 0) throw error(400, 'No fields to update');
 
-    updates.push(`updated_at = NOW()`);
     values.push(userId);
 
     const res = await db.query(

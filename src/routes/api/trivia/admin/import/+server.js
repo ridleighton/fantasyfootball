@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 
 async function getAdminUser(cookies, db) {
   const supabase = serverSupabase(cookies);
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data } = await supabase.auth.getSession(); const session = data?.session;
   if (!session) return null;
   const res = await db.query(
     'SELECT id, is_admin FROM users WHERE supabase_uid = $1',

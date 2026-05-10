@@ -13,7 +13,7 @@ const ESPN_STATUS_MAP = {
 
 async function requireAdmin(cookies, db) {
   const supabase = serverSupabase(cookies);
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data } = await supabase.auth.getSession(); const session = data?.session;
   if (!session) throw error(401, 'Unauthorized');
   const res = await db.query('SELECT is_admin, is_commissioner FROM users WHERE supabase_uid = $1', [session.user.id]);
   const u = res.rows[0];

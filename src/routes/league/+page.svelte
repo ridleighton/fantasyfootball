@@ -57,7 +57,7 @@
     saving = true;
     formError = '';
     try {
-      const url = editingId != null ? `/api/leagues/${editingId}` : '/api/leagues';
+      const url = editingId != null ? `/api/fantasy-leagues/${editingId}` : '/api/fantasy-leagues';
       const method = editingId != null ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -78,7 +78,7 @@
 
   async function deleteLeague(id) {
     if (!confirm('Delete this league listing?')) return;
-    await fetch(`/api/leagues/${id}`, { method: 'DELETE' });
+    await fetch(`/api/fantasy-leagues/${id}`, { method: 'DELETE' });
     await invalidateAll();
   }
 </script>

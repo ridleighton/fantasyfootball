@@ -25,12 +25,12 @@ export async function GET({ cookies }) {
       `SELECT id, sport, platform, commissioner_name, league_name, url,
               sort_order, winner,
               to_char(expiration_date, 'YYYY-MM-DD') AS expiration_date
-       FROM leagues ORDER BY sort_order ASC, id ASC`
+       FROM fantasy_leagues ORDER BY sort_order ASC, id ASC`
     );
     return json(result.rows);
   } catch (e) {
-    if (e.status) throw e; // re-throw SvelteKit HttpErrors (401, 403, etc.)
-    console.error('[GET /api/leagues]', e.message);
+    if (e.status) throw e;
+    console.error('[GET /api/fantasy-leagues]', e.message);
     throw error(500, e.message);
   } finally {
     await db.end();
@@ -48,7 +48,7 @@ export async function POST({ request, cookies }) {
     const { sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner } = body;
 
     const result = await db.query(
-      `INSERT INTO leagues (sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner)
+      `INSERT INTO fantasy_leagues (sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [sport, platform, commissioner_name, league_name, url, sort_order || 0,
@@ -57,7 +57,7 @@ export async function POST({ request, cookies }) {
     return json(result.rows[0], { status: 201 });
   } catch (e) {
     if (e.status) throw e;
-    console.error('[POST /api/leagues]', e.message);
+    console.error('[POST /api/fantasy-leagues]', e.message);
     throw error(500, e.message);
   } finally {
     await db.end();

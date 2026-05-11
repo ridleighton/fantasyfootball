@@ -11,7 +11,7 @@ export async function load({ parent }) {
       `SELECT id, sport, platform, commissioner_name, league_name, url,
               sort_order, winner,
               to_char(expiration_date, 'YYYY-MM-DD') AS expiration_date
-       FROM leagues
+       FROM fantasy_leagues
        ORDER BY sort_order ASC, id ASC`
     );
     return { leagues: result.rows };

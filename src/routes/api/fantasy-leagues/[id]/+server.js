@@ -27,7 +27,7 @@ export async function PUT({ params, request, cookies }) {
     const { sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner } = body;
 
     const result = await db.query(
-      `UPDATE leagues
+      `UPDATE fantasy_leagues
        SET sport = $1, platform = $2, commissioner_name = $3, league_name = $4,
            url = $5, sort_order = $6, expiration_date = $7, winner = $8
        WHERE id = $9
@@ -39,7 +39,7 @@ export async function PUT({ params, request, cookies }) {
     return json(result.rows[0]);
   } catch (e) {
     if (e.status) throw e;
-    console.error('[PUT /api/leagues/:id]', e.message);
+    console.error('[PUT /api/fantasy-leagues/:id]', e.message);
     throw error(500, e.message);
   } finally {
     await db.end();
@@ -53,11 +53,11 @@ export async function DELETE({ params, cookies }) {
     if (!user) throw error(401, 'Unauthorized');
     if (!user.is_admin && !user.is_commissioner) throw error(403, 'Forbidden');
 
-    await db.query('DELETE FROM leagues WHERE id = $1', [params.id]);
+    await db.query('DELETE FROM fantasy_leagues WHERE id = $1', [params.id]);
     return json({ ok: true });
   } catch (e) {
     if (e.status) throw e;
-    console.error('[DELETE /api/leagues/:id]', e.message);
+    console.error('[DELETE /api/fantasy-leagues/:id]', e.message);
     throw error(500, e.message);
   } finally {
     await db.end();

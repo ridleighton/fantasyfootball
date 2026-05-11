@@ -24,16 +24,16 @@ export async function PUT({ params, request, cookies }) {
     if (!user.is_admin && !user.is_commissioner) throw error(403, 'Forbidden');
 
     const body = await request.json();
-    const { sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner } = body;
+    const { sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner, status } = body;
 
     const result = await db.query(
       `UPDATE fantasy_leagues
        SET sport = $1, platform = $2, commissioner_name = $3, league_name = $4,
-           url = $5, sort_order = $6, expiration_date = $7, winner = $8
-       WHERE id = $9
+           url = $5, sort_order = $6, expiration_date = $7, winner = $8, status = $9
+       WHERE id = $10
        RETURNING id`,
       [sport, platform, commissioner_name, league_name, url,
-       sort_order ?? 0, expiration_date || null, winner || null, params.id]
+       sort_order ?? 0, expiration_date || null, winner || null, status || 'Active', params.id]
     );
     if (result.rows.length === 0) throw error(404, 'Not found');
     return json(result.rows[0]);

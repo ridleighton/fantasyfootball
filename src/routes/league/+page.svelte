@@ -5,15 +5,15 @@
 
   const sportIcons = { Football: '🏈', Hockey: '🏒', Basketball: '🏀', Baseball: '⚾', Soccer: '⚽', Other: '🏆' };
   const sports = ['Football', 'Hockey', 'Basketball', 'Baseball', 'Soccer', 'Other'];
+  const statuses = ['Active', 'Finished'];
 
   const canEdit = $derived(!!(data.profile?.is_admin || data.profile?.is_commissioner));
   const today = new Date().toISOString().slice(0, 10);
 
-  const visibleLeagues = $derived(
-    canEdit
-      ? data.leagues
-      : data.leagues.filter(l => !l.expiration_date || l.expiration_date >= today)
-  );
+  const isArchived = (l) => l.status === 'Finished' || !!(l.expiration_date && l.expiration_date < today);
+
+  const activeLeagues = $derived(data.leagues.filter(l => !isArchived(l)));
+  const archivedLeagues = $derived(data.leagues.filter(l => isArchived(l)));
 
   let editMode = $state(false);
   let editingId = $state(null);
@@ -21,7 +21,7 @@
   let saving = $state(false);
   let formError = $state('');
 
-  const emptyForm = () => ({ sport: 'Football', platform: '', commissioner_name: '', league_name: '', url: 'https://', sort_order: 0, expiration_date: '', winner: '' });
+  const emptyForm = () => ({ sport: 'Football', platform: '', commissioner_name: '', league_name: '', url: 'https://', sort_order: 0, expiration_date: '', winner: '', status: 'Active' });
   let form = $state(emptyForm());
 
   function startEdit(league) {
@@ -36,7 +36,8 @@
       url: league.url,
       sort_order: league.sort_order ?? 0,
       expiration_date: league.expiration_date ?? '',
-      winner: league.winner ?? ''
+      winner: league.winner ?? '',
+      status: league.status ?? 'Active',
     };
   }
 
@@ -129,6 +130,12 @@
             </select>
           </div>
           <div>
+            <label class="db-label" for="f-status">Status</label>
+            <select id="f-status" class="db-input" bind:value={form.status}>
+              {#each statuses as s}<option>{s}</option>{/each}
+            </select>
+          </div>
+          <div>
             <label class="db-label" for="f-platform">Platform</label>
             <input id="f-platform" class="db-input" type="text" placeholder="ESPN, Yahoo, Sleeper…" bind:value={form.platform} />
           </div>
@@ -140,6 +147,10 @@
             <label class="db-label" for="f-name">League name</label>
             <input id="f-name" class="db-input" type="text" bind:value={form.league_name} />
           </div>
+          <div>
+            <label class="db-label" for="f-winner">Champion</label>
+            <input id="f-winner" class="db-input" type="text" placeholder="(when season ends)" bind:value={form.winner} />
+          </div>
         </div>
 
         <div style="margin-bottom:12px">
@@ -147,7 +158,7 @@
           <input id="f-url" class="db-input" type="url" bind:value={form.url} style="width:100%;box-sizing:border-box" />
         </div>
 
-        <div class="form-grid-3" style="margin-bottom:20px">
+        <div class="form-grid-2" style="margin-bottom:20px">
           <div>
             <label class="db-label" for="f-sort">Sort order</label>
             <input id="f-sort" class="db-input" type="number" bind:value={form.sort_order} min="0" />
@@ -155,10 +166,6 @@
           <div>
             <label class="db-label" for="f-expires">Expiration date</label>
             <input id="f-expires" class="db-input" type="date" bind:value={form.expiration_date} />
-          </div>
-          <div>
-            <label class="db-label" for="f-winner">Winner</label>
-            <input id="f-winner" class="db-input" type="text" placeholder="(if complete)" bind:value={form.winner} />
           </div>
         </div>
 
@@ -171,46 +178,96 @@
       </div>
     {/if}
 
-    {#if visibleLeagues.length === 0}
+    <!-- Active leagues -->
+    {#if activeLeagues.length === 0 && archivedLeagues.length === 0}
       <div class="db-card" style="padding:40px;text-align:center;color:var(--fg-3)">
-        No active leagues right now.
+        No leagues yet.
       </div>
     {:else}
-      <div class="leagues-grid">
-        {#each visibleLeagues as league (league.id)}
-          {@const expired = !!(league.expiration_date && league.expiration_date < today)}
-          <div class="league-card db-card" class:expired>
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                <span style="font-size:20px">{sportIcons[league.sport] ?? '🏆'}</span>
-                <span class="sport-badge">{league.sport}</span>
-                <span class="platform-badge">{league.platform}</span>
+      {#if activeLeagues.length > 0}
+        <div class="leagues-grid" style="margin-bottom:36px">
+          {#each activeLeagues as league (league.id)}
+            <div class="league-card db-card">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                  <span style="font-size:20px">{sportIcons[league.sport] ?? '🏆'}</span>
+                  <span class="sport-badge">{league.sport}</span>
+                  <span class="platform-badge">{league.platform}</span>
+                </div>
               </div>
-              {#if expired}
-                <span class="expired-badge">Expired</span>
-              {/if}
+
+              <div style="font-weight:900;font-size:19px;line-height:1.2;margin-bottom:8px">{league.league_name}</div>
+
+              <div class="commissioner-pill">
+                <span class="crown-icon">👑</span>
+                <span>{league.commissioner_name}</span>
+              </div>
+
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px">
+                <a href={league.url} target="_blank" rel="noopener noreferrer"
+                   class="db-btn primary" style="font-size:12px;text-decoration:none;display:inline-flex;align-items:center">
+                  Visit league →
+                </a>
+                {#if editMode}
+                  <button class="db-btn" style="font-size:12px" onclick={() => startEdit(league)}>Edit</button>
+                  <button class="db-btn" style="font-size:12px;color:var(--bad)" onclick={() => deleteLeague(league.id)}>Delete</button>
+                {/if}
+              </div>
             </div>
+          {/each}
+        </div>
+      {/if}
 
-            <div style="font-weight:900;font-size:19px;line-height:1.2;margin-bottom:4px">{league.league_name}</div>
-            <div style="font-size:13px;color:var(--fg-2);margin-bottom:14px">Commissioner: {league.commissioner_name}</div>
-
-            {#if league.winner}
-              <div style="font-size:13px;color:var(--good);font-weight:700;margin-bottom:14px">🏆 {league.winner}</div>
-            {/if}
-
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <a href={league.url} target="_blank" rel="noopener noreferrer"
-                 class="db-btn primary" style="font-size:12px;text-decoration:none;display:inline-flex;align-items:center">
-                Visit league →
-              </a>
-              {#if editMode}
-                <button class="db-btn" style="font-size:12px" onclick={() => startEdit(league)}>Edit</button>
-                <button class="db-btn" style="font-size:12px;color:var(--bad)" onclick={() => deleteLeague(league.id)}>Delete</button>
-              {/if}
-            </div>
+      <!-- Archived / Previous leagues -->
+      {#if archivedLeagues.length > 0 || (editMode && archivedLeagues.length === 0)}
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-3);margin-bottom:14px">
+            Previous Leagues
           </div>
-        {/each}
-      </div>
+          <div class="leagues-grid">
+            {#each archivedLeagues as league (league.id)}
+              <div class="league-card db-card archived-card">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                    <span style="font-size:18px">{sportIcons[league.sport] ?? '🏆'}</span>
+                    <span class="sport-badge">{league.sport}</span>
+                    <span class="platform-badge">{league.platform}</span>
+                  </div>
+                  <span class="finished-badge">Finished</span>
+                </div>
+
+                <div style="font-weight:800;font-size:16px;line-height:1.2;margin-bottom:6px;color:var(--fg-2)">{league.league_name}</div>
+
+                <div class="commissioner-pill commissioner-pill--sm">
+                  <span class="crown-icon">👑</span>
+                  <span>{league.commissioner_name}</span>
+                </div>
+
+                {#if league.winner}
+                  <div class="winner-banner">
+                    <span class="trophy">🥇</span>
+                    <div>
+                      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.7">Champion</div>
+                      <div style="font-weight:900;font-size:15px;line-height:1.1">{league.winner}</div>
+                    </div>
+                  </div>
+                {/if}
+
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+                  <a href={league.url} target="_blank" rel="noopener noreferrer"
+                     class="db-btn" style="font-size:12px;text-decoration:none;display:inline-flex;align-items:center">
+                    View archive →
+                  </a>
+                  {#if editMode}
+                    <button class="db-btn" style="font-size:12px" onclick={() => startEdit(league)}>Edit</button>
+                    <button class="db-btn" style="font-size:12px;color:var(--bad)" onclick={() => deleteLeague(league.id)}>Delete</button>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     {/if}
 
   </div>
@@ -224,10 +281,13 @@
   }
   .league-card {
     padding: 20px;
+  }
+  .archived-card {
+    opacity: 0.75;
     transition: opacity 0.2s;
   }
-  .league-card.expired {
-    opacity: 0.45;
+  .archived-card:hover {
+    opacity: 1;
   }
   .form-card {
     padding: 22px;
@@ -238,13 +298,8 @@
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
-  .form-grid-3 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
-  }
   @media (max-width: 500px) {
-    .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+    .form-grid-2 { grid-template-columns: 1fr; }
   }
   .sport-badge {
     font-size: 11px;
@@ -264,14 +319,50 @@
     padding: 2px 8px;
     border-radius: 999px;
   }
-  .expired-badge {
+  .commissioner-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--fg-1);
+    background: var(--bg-3);
+    padding: 4px 10px 4px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .commissioner-pill--sm {
+    font-size: 11px;
+    padding: 3px 8px 3px 5px;
+  }
+  .crown-icon {
+    font-size: 13px;
+    line-height: 1;
+  }
+  .finished-badge {
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--fg-3);
     background: var(--bg-3);
     padding: 2px 7px;
     border-radius: 999px;
-    letter-spacing: 0.05em;
+  }
+  .winner-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: color-mix(in srgb, #f5a623 12%, var(--bg-2));
+    border: 1px solid color-mix(in srgb, #f5a623 35%, transparent);
+    border-radius: 10px;
+    color: #f5a623;
+  }
+  .trophy {
+    font-size: 24px;
+    line-height: 1;
+    flex-shrink: 0;
   }
 </style>

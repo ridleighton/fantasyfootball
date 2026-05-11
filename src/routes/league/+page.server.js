@@ -9,7 +9,7 @@ export async function load({ parent }) {
   try {
     const result = await db.query(
       `SELECT id, sport, platform, commissioner_name, league_name, url,
-              sort_order, winner,
+              sort_order, winner, status,
               to_char(expiration_date, 'YYYY-MM-DD') AS expiration_date
        FROM fantasy_leagues
        ORDER BY sort_order ASC, id ASC`

@@ -23,7 +23,7 @@ export async function GET({ cookies }) {
     if (!user) throw error(401, 'Unauthorized');
     const result = await db.query(
       `SELECT id, sport, platform, commissioner_name, league_name, url,
-              sort_order, winner,
+              sort_order, winner, status,
               to_char(expiration_date, 'YYYY-MM-DD') AS expiration_date
        FROM fantasy_leagues ORDER BY sort_order ASC, id ASC`
     );
@@ -45,14 +45,14 @@ export async function POST({ request, cookies }) {
     if (!user.is_admin && !user.is_commissioner) throw error(403, 'Forbidden');
 
     const body = await request.json();
-    const { sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner } = body;
+    const { sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner, status } = body;
 
     const result = await db.query(
-      `INSERT INTO fantasy_leagues (sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO fantasy_leagues (sport, platform, commissioner_name, league_name, url, sort_order, expiration_date, winner, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [sport, platform, commissioner_name, league_name, url, sort_order || 0,
-       expiration_date || null, winner || null]
+       expiration_date || null, winner || null, status || 'Active']
     );
     return json(result.rows[0], { status: 201 });
   } catch (e) {

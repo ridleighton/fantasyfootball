@@ -79,18 +79,22 @@
     }
   }
 
-  async function importFromApi(db) {
+  async function importFromApi(db, opts = {}) {
     if (!db.api_league_id) {
       alert('This database has no api_league_id set.');
       return;
     }
+    importDbId = db.id;
     importStatus = '';
     importLoading = true;
     try {
+      const body = opts.allSeasons
+        ? { databaseId: db.id, importType: 'api', allSeasons: true }
+        : { databaseId: db.id, importType: 'api', season: importSeason };
       const res = await fetch('/api/trivia/admin/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ databaseId: db.id, importType: 'api', season: importSeason })
+        body: JSON.stringify(body)
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.message ?? `Error ${res.status}`);
@@ -271,12 +275,23 @@
               />
               <button
                 class="db-btn"
-                onclick={() => { importDbId = db.id; importFromApi(db); }}
+                onclick={() => importFromApi(db)}
                 disabled={importLoading && importDbId === db.id}
               >
-                {importLoading && importDbId === db.id ? 'Importing…' : 'Import from API'}
+                {importLoading && importDbId === db.id ? 'Importing…' : 'This season'}
+              </button>
+              <button
+                class="db-btn"
+                onclick={() => importFromApi(db, { allSeasons: true })}
+                disabled={importLoading && importDbId === db.id}
+                title="Imports 2022 → current year. Uses many API calls — do once."
+              >
+                {importLoading && importDbId === db.id ? 'Importing…' : 'All seasons (2022→now)'}
               </button>
             </div>
+            <p class="import-hint db-sub" style="font-size:11px;margin-top:4px">
+              "All seasons" fetches every team then every roster — uses ~33 API calls per season (100/day on free plan).
+            </p>
             {#if importStatus && importDbId === db.id}
               <p class="import-status" class:error={importStatus.startsWith('Error')}>{importStatus}</p>
             {/if}

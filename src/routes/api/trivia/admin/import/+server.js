@@ -43,6 +43,7 @@ async function ensureSchema(db) {
   await db.query(`ALTER TABLE trivia_players ADD COLUMN IF NOT EXISTS headshot_url TEXT`);
   await db.query(`ALTER TABLE trivia_players ADD COLUMN IF NOT EXISTS height VARCHAR(20)`);
   await db.query(`ALTER TABLE trivia_players ADD COLUMN IF NOT EXISTS weight SMALLINT`);
+  await db.query(`ALTER TABLE trivia_players ADD COLUMN IF NOT EXISTS college_espn_id INTEGER`);
   await db.query(`ALTER TABLE trivia_teams ADD COLUMN IF NOT EXISTS logo_dark_url TEXT`);
   await db.query(`ALTER TABLE trivia_teams ADD COLUMN IF NOT EXISTS alternate_color VARCHAR(7)`);
   await db.query(`
@@ -174,7 +175,8 @@ async function fetchRostersFromTeams(teamLookup, espnLeague) {
             position:    player.position?.abbreviation ?? null,
             jersey:      player.jersey ?? null,
             espnTeamId,
-            college:     player.college?.name ?? null,
+            college:        player.college?.name ?? null,
+            collegeEspnId:  player.college?.id ? Number(player.college.id) : null,
             draftYear:   player.draft?.year ?? null,
             draftRound:  player.draft?.round ?? null,
             draftPick:   player.draft?.selection ?? null,
@@ -216,20 +218,21 @@ async function savePlayersAndRosters(db, databaseId, teamLookup, parsedPlayers, 
     const res = await db.query(
       `INSERT INTO trivia_players
          (database_id, full_name, aliases, metadata, api_player_id,
-          college, draft_year, draft_round, draft_pick, draft_team,
+          college, college_espn_id, draft_year, draft_round, draft_pick, draft_team,
           headshot_url, height, weight)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (api_player_id, database_id) DO UPDATE
-         SET full_name    = EXCLUDED.full_name,
-             aliases      = EXCLUDED.aliases,
-             college      = COALESCE(EXCLUDED.college,      trivia_players.college),
-             draft_year   = COALESCE(EXCLUDED.draft_year,   trivia_players.draft_year),
-             draft_round  = COALESCE(EXCLUDED.draft_round,  trivia_players.draft_round),
-             draft_pick   = COALESCE(EXCLUDED.draft_pick,   trivia_players.draft_pick),
-             draft_team   = COALESCE(EXCLUDED.draft_team,   trivia_players.draft_team),
-             headshot_url = COALESCE(EXCLUDED.headshot_url, trivia_players.headshot_url),
-             height       = COALESCE(EXCLUDED.height,       trivia_players.height),
-             weight       = COALESCE(EXCLUDED.weight,       trivia_players.weight),
+         SET full_name       = EXCLUDED.full_name,
+             aliases         = EXCLUDED.aliases,
+             college         = COALESCE(EXCLUDED.college,         trivia_players.college),
+             college_espn_id = COALESCE(EXCLUDED.college_espn_id, trivia_players.college_espn_id),
+             draft_year      = COALESCE(EXCLUDED.draft_year,      trivia_players.draft_year),
+             draft_round     = COALESCE(EXCLUDED.draft_round,     trivia_players.draft_round),
+             draft_pick      = COALESCE(EXCLUDED.draft_pick,      trivia_players.draft_pick),
+             draft_team      = COALESCE(EXCLUDED.draft_team,      trivia_players.draft_team),
+             headshot_url    = COALESCE(EXCLUDED.headshot_url,    trivia_players.headshot_url),
+             height          = COALESCE(EXCLUDED.height,          trivia_players.height),
+             weight          = COALESCE(EXCLUDED.weight,          trivia_players.weight),
              metadata  = jsonb_strip_nulls(
                trivia_players.metadata || jsonb_build_object(
                  'position', EXCLUDED.metadata->>'position',
@@ -253,7 +256,8 @@ async function savePlayersAndRosters(db, databaseId, teamLookup, parsedPlayers, 
              )
        RETURNING id, (xmax = 0) AS is_insert`,
       [databaseId, p.fullName, aliases, metadata, Number(p.espnId),
-       p.college ?? null, p.draftYear ?? null, p.draftRound ?? null, p.draftPick ?? null, p.draftTeam ?? null,
+       p.college ?? null, p.collegeEspnId ?? null,
+       p.draftYear ?? null, p.draftRound ?? null, p.draftPick ?? null, p.draftTeam ?? null,
        p.headshotUrl ?? null, p.height ?? null, p.weight ?? null]
     );
 
@@ -359,34 +363,37 @@ async function importAthleteDetails(db, databaseId, espnLeague, offset, limit) {
       // Always set headshot from CDN — reliable even when core API returns nothing
       const headshotUrl = `${headshotBase}/${espnId}.png`;
 
-      let college = null, draftYear = null, draftRound = null, draftPick = null, draftTeam = null;
+      let college = null, collegeEspnId = null;
+      let draftYear = null, draftRound = null, draftPick = null, draftTeam = null;
       let height = null, weight = null;
 
       const data = results[j];
       if (data) {
         const ath = data.athlete ?? data;
-        college    = ath.college?.name ?? null;
-        draftYear  = ath.draft?.year ?? null;
-        draftRound = ath.draft?.round ?? null;
-        draftPick  = ath.draft?.selection ?? null;
-        // draft.team may be a $ref with no inline name — use what we can
-        draftTeam  = ath.draft?.team?.displayName ?? ath.draft?.team?.name ?? null;
-        height     = ath.displayHeight ?? null;
-        weight     = ath.weight ? Number(ath.weight) : null;
+        college       = ath.college?.name ?? null;
+        collegeEspnId = ath.college?.id ? Number(ath.college.id) : null;
+        draftYear     = ath.draft?.year ?? null;
+        draftRound    = ath.draft?.round ?? null;
+        draftPick     = ath.draft?.selection ?? null;
+        draftTeam     = ath.draft?.team?.displayName ?? ath.draft?.team?.name ?? null;
+        height        = ath.displayHeight ?? null;
+        weight        = ath.weight ? Number(ath.weight) : null;
       }
 
       await db.query(
         `UPDATE trivia_players SET
-           college      = COALESCE($1, college),
-           draft_year   = COALESCE($2, draft_year),
-           draft_round  = COALESCE($3, draft_round),
-           draft_pick   = COALESCE($4, draft_pick),
-           draft_team   = COALESCE($5, draft_team),
-           headshot_url = $6,
-           height       = COALESCE($7, height),
-           weight       = COALESCE($8::smallint, weight)
-         WHERE id = $9`,
-        [college, draftYear, draftRound, draftPick, draftTeam, headshotUrl, height, weight, batch[j].id]
+           college         = COALESCE($1, college),
+           college_espn_id = COALESCE($2, college_espn_id),
+           draft_year      = COALESCE($3, draft_year),
+           draft_round     = COALESCE($4, draft_round),
+           draft_pick      = COALESCE($5, draft_pick),
+           draft_team      = COALESCE($6, draft_team),
+           headshot_url    = $7,
+           height          = COALESCE($8, height),
+           weight          = COALESCE($9::smallint, weight)
+         WHERE id = $10`,
+        [college, collegeEspnId, draftYear, draftRound, draftPick, draftTeam,
+         headshotUrl, height, weight, batch[j].id]
       );
       updated++;
     }

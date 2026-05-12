@@ -29,6 +29,8 @@
     { value: 'player_name',     label: 'Player Name' },
     { value: 'player_headshot', label: 'Player Headshot' },
     { value: 'stat_line',       label: 'Stat Line' },
+    { value: 'college_logo',    label: 'College Logo' },
+    { value: 'college_name',    label: 'College Name' },
   ];
 
   const SEARCH_DISPLAY_OPTIONS = [

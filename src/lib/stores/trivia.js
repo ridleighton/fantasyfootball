@@ -2,7 +2,6 @@ import { writable, derived } from 'svelte/store';
 
 export const slots = writable([]);
 export const foundIds = writable(new Set());
-export const timeLeft = writable(0);
 export const gameOver = writable(false);
 export const playerNames = writable({}); // slotId → playerName, populated after found/reveal
 

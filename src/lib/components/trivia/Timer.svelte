@@ -1,36 +1,39 @@
 <script>
-  let { seconds, running, onExpire } = $props();
+  let { timeLimit, running, onExpire, onTick } = $props();
 
-  let current = $state(seconds);
+  let elapsed = $state(0);
 
-  // When the seconds prop changes (e.g., reset), sync current
+  // Reset when timeLimit changes (new game)
   $effect(() => {
-    current = seconds;
+    timeLimit; // track
+    elapsed = 0;
   });
 
-  // Tick down while running
+  const hasLimit = $derived(timeLimit > 0);
+
+  // Tick up while running
   $effect(() => {
-    if (!running || current <= 0) return;
+    if (!running) return;
 
     const id = setInterval(() => {
-      if (current <= 1) {
-        current = 0;
+      elapsed += 1;
+      onTick?.(elapsed);
+      if (hasLimit && elapsed >= timeLimit) {
         clearInterval(id);
-        onExpire?.();
-      } else {
-        current -= 1;
+        onExpire?.(elapsed);
       }
     }, 1000);
 
     return () => clearInterval(id);
   });
 
-  const mins = $derived(Math.floor(current / 60));
-  const secs = $derived(current % 60);
+  const mins = $derived(Math.floor(elapsed / 60));
+  const secs = $derived(elapsed % 60);
   const display = $derived(
     `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   );
-  const urgent = $derived(current <= 30 && current > 0);
+  // Urgent only when a limit exists and we're in the final 30 seconds
+  const urgent = $derived(hasLimit && elapsed >= timeLimit - 30 && elapsed < timeLimit);
 </script>
 
 <div class="timer" class:urgent>

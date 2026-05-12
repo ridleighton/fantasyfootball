@@ -95,6 +95,30 @@
       {/if}
     </div>
 
+  {:else if hintType === 'college_name'}
+    {#if hd.college_name}
+      <div class="college-name">{hd.college_name}</div>
+    {:else}
+      <div class="hint-empty">—</div>
+    {/if}
+
+  {:else if hintType === 'college_logo'}
+    <div class="logo-single">
+      {#if hd.college_logo_url}
+        <img
+          src={hd.college_logo_url}
+          alt={hd.college_name ?? 'College'}
+          class="team-logo-lg"
+          onerror={e => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden'); }}
+        />
+        <span class="logo-fallback hidden" aria-hidden="true">🎓</span>
+      {:else if hd.college_name}
+        <div class="college-name">{hd.college_name}</div>
+      {:else}
+        <span class="logo-fallback-lg" aria-hidden="true">🎓</span>
+      {/if}
+    </div>
+
   {:else if hintType === 'stat_line'}
     {#if hd.stat_label != null && hd.stat_value != null}
       <div class="stat-line">
@@ -258,6 +282,16 @@
   .headshot-fallback svg {
     width: 40px;
     height: 40px;
+  }
+
+  /* ── College ── */
+  .college-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    text-align: center;
+    line-height: 1.3;
+    padding: 0 4px;
   }
 
   /* ── Stat line ── */

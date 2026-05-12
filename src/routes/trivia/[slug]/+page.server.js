@@ -20,10 +20,11 @@ export async function load({ parent, params }) {
     const game = gameRes.rows[0];
     const hintType = game.hint_type ?? 'blank';
 
-    // Base slot query — always join player for name/headshot
+    // Base slot query — always join player for name/headshot/college
     const slotsRes = await db.query(
       `SELECT tga.id, tga.hint_data, tga.sort_order,
-              tp.id AS player_id, tp.full_name, tp.headshot_url
+              tp.id AS player_id, tp.full_name, tp.headshot_url,
+              tp.college, tp.college_espn_id
        FROM trivia_game_answers tga
        JOIN trivia_players tp ON tp.id = tga.player_id
        WHERE tga.game_id = $1
@@ -109,6 +110,24 @@ export async function load({ parent, params }) {
         }
         return { id: r.id, sort_order: r.sort_order, hintData: resolved };
       });
+
+    } else if (hintType === 'college_name') {
+      slots = rawSlots.map(r => ({
+        id: r.id, sort_order: r.sort_order,
+        hintData: { ...r.hint_data, college_name: r.college ?? null },
+      }));
+
+    } else if (hintType === 'college_logo') {
+      slots = rawSlots.map(r => ({
+        id: r.id, sort_order: r.sort_order,
+        hintData: {
+          ...r.hint_data,
+          college_name: r.college ?? null,
+          college_logo_url: r.college_espn_id
+            ? `https://a.espncdn.com/i/teamlogos/colleges/500/${r.college_espn_id}.png`
+            : null,
+        },
+      }));
 
     } else if (hintType === 'stat_line' && VALID_STAT_KEYS.includes(game.hint_stat_field)) {
       const field = game.hint_stat_field;

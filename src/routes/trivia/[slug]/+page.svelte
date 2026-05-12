@@ -1,6 +1,6 @@
 <script>
   import { goto } from '$app/navigation';
-  import { slots, foundIds, timeLeft, gameOver, playerNames, progress } from '$lib/stores/trivia.js';
+  import { slots, foundIds, gameOver, playerNames, progress } from '$lib/stores/trivia.js';
   import SlotCard from '$lib/components/trivia/SlotCard.svelte';
   import SearchAutocomplete from '$lib/components/trivia/SearchAutocomplete.svelte';
   import Timer from '$lib/components/trivia/Timer.svelte';
@@ -11,25 +11,24 @@
   let timerRunning = $state(false);
   let shake = $state(false);
   let shakeKey = $state(0);
+  let elapsedSecs = $state(0);
 
   let slotsVal = $state([]);
   let foundIdsVal = $state(new Set());
   let gameOverVal = $state(false);
   let playerNamesVal = $state({});
   let progressVal = $state({ found: 0, total: 0, pct: 0 });
-  let timeLeftVal = $state(0);
 
   $effect(() => {
     slots.set(data.slots);
     foundIds.set(new Set());
-    timeLeft.set(data.game.time_limit_seconds);
     gameOver.set(false);
     playerNames.set({});
+    elapsedSecs = 0;
 
     const unsubs = [
       slots.subscribe(v => { slotsVal = v; }),
       foundIds.subscribe(v => { foundIdsVal = v; }),
-      timeLeft.subscribe(v => { timeLeftVal = v; }),
       gameOver.subscribe(v => { gameOverVal = v; }),
       playerNames.subscribe(v => { playerNamesVal = v; }),
       progress.subscribe(v => { progressVal = v; }),
@@ -70,7 +69,8 @@
   }
 
   function triggerGameOver() { timerRunning = false; gameOver.set(true); }
-  function handleTimerExpire() { triggerGameOver(); }
+  function handleTimerExpire(t) { elapsedSecs = t; triggerGameOver(); }
+  function handleTick(t) { elapsedSecs = t; }
   function handleGiveUp() { triggerGameOver(); }
   function handlePlayAgain() { goto('/trivia'); }
 </script>
@@ -84,6 +84,7 @@
       game={data.game}
       found={progressVal.found}
       total={progressVal.total}
+      elapsedSecs={elapsedSecs}
       onPlayAgain={handlePlayAgain}
     />
     <div class="slots-section">
@@ -107,6 +108,7 @@
       game={data.game}
       found={progressVal.found}
       total={progressVal.total}
+      elapsedSecs={elapsedSecs}
       onPlayAgain={handlePlayAgain}
     />
     <div class="slots-section">
@@ -132,9 +134,10 @@
 
     <div class="game-controls">
       <Timer
-        seconds={timeLeftVal}
+        timeLimit={data.game.time_limit_seconds}
         running={timerRunning}
         onExpire={handleTimerExpire}
+        onTick={handleTick}
       />
       <div class="progress-display">
         <span class="found-count">{progressVal.found}</span>

@@ -1,6 +1,4 @@
 // ---------------- Drive image URL ----------------
-// The classic `uc?export=view&id=…` link now serves an interstitial page in many cases.
-// The thumbnail endpoint still returns the raw image and respects size hints.
 export function driveImageUrl(id, size = 'w800') {
   if (!id) return null;
   return `https://drive.google.com/thumbnail?id=${id}&sz=${size}`;
@@ -8,7 +6,6 @@ export function driveImageUrl(id, size = 'w800') {
 
 // ---------------- Odds parsing ----------------
 
-// Extract a single numeric percentage from a free-form string.
 export function parseOddsPercent(s) {
   if (s == null) return null;
   const str = String(s).trim();
@@ -23,13 +20,6 @@ export function parseOddsPercent(s) {
   return n;
 }
 
-// Parse a free-form odds string into [{ school, percent }, ...].
-// Accepts forms like:
-//   "Texas 40%, Oklahoma 35%, USC 25%"
-//   "Texas: 40 | Oklahoma: 35 | USC: 25"
-//   "Texas (40%); Oklahoma (35%)"
-//   "Texas-40, Oklahoma-35"
-//   "Texas 40%\nOklahoma 35%"
 export function parseOddsPairs(s) {
   if (s == null) return [];
   const str = String(s).trim();
@@ -38,12 +28,10 @@ export function parseOddsPairs(s) {
   const chunks = str.split(/[,|;\n]+/).map(c => c.trim()).filter(Boolean);
   const pairs = [];
   for (const chunk of chunks) {
-    // Find the last numeric token in the chunk; everything before is school name.
     const numMatch = chunk.match(/(-?\d+(?:\.\d+)?)\s*%?\s*\)?$/);
     if (!numMatch) continue;
     const numStart = chunk.lastIndexOf(numMatch[0]);
     let school = chunk.slice(0, numStart).trim();
-    // Strip trailing punctuation/separators
     school = school.replace(/[:\-–—()[\]\s]+$/, '').trim();
     school = school.replace(/^[([\s]+/, '').trim();
     if (!school) continue;
@@ -52,6 +40,14 @@ export function parseOddsPairs(s) {
     pairs.push({ school, percent });
   }
   return pairs;
+}
+
+// Build a canonical odds string from a list of {school, percent} pairs.
+export function buildOddsString(pairs) {
+  return pairs
+    .filter(p => p?.school && p.percent != null && !Number.isNaN(Number(p.percent)))
+    .map(p => `${p.school.trim()} ${Number(p.percent).toFixed(1)}%`)
+    .join(', ');
 }
 
 // ---------------- Grouping ----------------
@@ -100,19 +96,20 @@ export function commitThreshold(schoolCount) {
   return 15;
 }
 
-// Build commit-roll display data: parse the odds string for school→percentage pairs.
-// Falls back to per-row (school column + odds column) if the odds string doesn't yield
-// multiple pairs.
+// Commit display: pulls schools from the Odds string. Works for any pair count
+// (including 1). Falls back to per-row school + odds if the Odds string yields
+// no pairs, which preserves backward compatibility with old data shapes.
 export function computeCommit(group) {
-  // Prefer parsing the odds string. Use the first non-empty odds value in the group.
   let pairs = [];
   for (const r of group.rows) {
     const found = parseOddsPairs(r.odds);
-    if (found.length >= 2) { pairs = found; break; }
+    if (found.length >= 1) {
+      // Prefer the longest pair list we can find across rows
+      if (found.length > pairs.length) pairs = found;
+    }
   }
 
   if (pairs.length === 0) {
-    // Fallback: one school per row, school in `school`, percentage in `odds`.
     const buckets = new Map();
     for (const r of group.rows) {
       const sch = (r.school ?? '').trim();
@@ -123,7 +120,6 @@ export function computeCommit(group) {
     }
     pairs = [...buckets.entries()].map(([school, percent]) => ({ school, percent }));
   } else {
-    // De-duplicate school names (last occurrence wins)
     const dedup = new Map();
     for (const p of pairs) dedup.set(p.school, p.percent);
     pairs = [...dedup.entries()].map(([school, percent]) => ({ school, percent }));
@@ -136,32 +132,56 @@ export function computeCommit(group) {
   for (const s of list) {
     s.normalized = (s.eligible && totalEligible > 0) ? (s.raw / totalEligible) * 100 : 0;
   }
-  return { schools: list, threshold };
+  // Solo: exactly one school in the running → no roll, just award.
+  const eligibleCount = list.filter(s => s.eligible).length;
+  const solo = list.length === 1 || eligibleCount === 1;
+  return { schools: list, threshold, solo };
 }
 
-// Steal: equal weights, no threshold. `eligible` is always true here so no
-// "below cut" / threshold text ever surfaces for steals.
+// Steal: equal weights across each row's school AND the committed school
+// (if it's not already in the list). Locked is detected from any row.
 export function computeSteal(group) {
   const isLocked = group.rows.some(r => r.locked === true);
+  const committedSchool = group.rows.find(r => (r.committed_school ?? '').trim())?.committed_school?.trim() ?? null;
+
   const schoolsSet = new Set();
   for (const r of group.rows) {
     const sch = (r.school ?? '').trim();
     if (sch) schoolsSet.add(sch);
   }
+  // Include the committed school as a candidate to "stay" — required for the
+  // failed-steal outcome to be a roll outcome rather than impossible.
+  if (committedSchool) schoolsSet.add(committedSchool);
+
   const schools = [...schoolsSet];
   const pct = schools.length > 0 ? 100 / schools.length : 0;
   return {
     locked: isLocked,
-    schools: schools.map(s => ({ school: s, normalized: pct, eligible: true, raw: pct }))
+    committedSchool,
+    schools: schools.map(s => ({
+      school: s,
+      normalized: pct,
+      eligible: true,
+      raw: pct,
+      isCommitted: committedSchool && s.toLowerCase() === committedSchool.toLowerCase()
+    }))
   };
 }
 
-// Auto-commit: equal weights; if only one school, no roll.
+// Auto-commit: equal weights. Tolerant — if the school column is empty, will
+// fall back to parsing the odds string for school names.
 export function computeAutoCommit(group) {
   const schoolsSet = new Set();
   for (const r of group.rows) {
     const sch = (r.school ?? '').trim();
     if (sch) schoolsSet.add(sch);
+  }
+  if (schoolsSet.size === 0) {
+    // Fallback: parse odds for school names
+    for (const r of group.rows) {
+      const pairs = parseOddsPairs(r.odds);
+      for (const p of pairs) if (p.school) schoolsSet.add(p.school);
+    }
   }
   const schools = [...schoolsSet];
   const solo = schools.length === 1;
@@ -189,33 +209,37 @@ export function weightedPick(items, rng = Math.random) {
 
 export function executeRoll(group) {
   const type = (group.type ?? '').trim();
+
   if (type === 'Commit') {
-    const { schools, threshold } = computeCommit(group);
+    const { schools, threshold, solo } = computeCommit(group);
     const eligible = schools.filter(s => s.eligible);
     if (eligible.length === 0) {
-      return { outcome: 'commit_no_eligible', winner: null, display: { schools, threshold } };
+      return { outcome: 'commit_no_eligible', winner: null, display: { schools, threshold, solo } };
     }
-    const winner = weightedPick(
-      eligible.map(s => ({ value: s.school, weight: s.normalized }))
-    );
-    return { outcome: 'commit', winner, display: { schools, threshold } };
+    if (solo) {
+      return { outcome: 'commit_solo', winner: eligible[0].school, display: { schools, threshold, solo } };
+    }
+    const winner = weightedPick(eligible.map(s => ({ value: s.school, weight: s.normalized })));
+    return { outcome: 'commit', winner, display: { schools, threshold, solo } };
   }
 
   if (type === 'Steal') {
     const data = computeSteal(group);
     if (data.locked) {
-      return { outcome: 'steal_failed_locked', winner: null, display: data };
+      return { outcome: 'steal_failed_locked', winner: data.committedSchool, display: data };
     }
     if (data.schools.length === 0) {
       return { outcome: 'steal_no_schools', winner: null, display: data };
     }
-    const winner = weightedPick(
-      data.schools.map(s => ({ value: s.school, weight: s.normalized }))
-    );
-    const winningRow = group.rows.find(r => (r.school ?? '').trim() === winner);
+    const winner = weightedPick(data.schools.map(s => ({ value: s.school, weight: s.normalized })));
+    const isStay = data.committedSchool && winner && winner.toLowerCase() === data.committedSchool.toLowerCase();
+    if (isStay) {
+      return { outcome: 'steal_failed_stayed', winner, display: data };
+    }
+    const winningRow = group.rows.find(r => (r.school ?? '').trim().toLowerCase() === winner.toLowerCase());
     const cameLate = winningRow?.in_original_roll === false;
     return {
-      outcome: cameLate ? 'steal_late' : 'steal',
+      outcome: cameLate ? 'steal_succeeded_late' : 'steal_succeeded',
       winner,
       cameLate,
       display: data
@@ -230,9 +254,7 @@ export function executeRoll(group) {
     if (data.schools.length === 0) {
       return { outcome: 'auto_commit_no_schools', winner: null, display: data };
     }
-    const winner = weightedPick(
-      data.schools.map(s => ({ value: s.school, weight: s.normalized }))
-    );
+    const winner = weightedPick(data.schools.map(s => ({ value: s.school, weight: s.normalized })));
     return { outcome: 'auto_commit', winner, display: data };
   }
 
@@ -243,7 +265,13 @@ export function executeRoll(group) {
 
 export async function resolvePhotos(db, schoolNames) {
   const lowered = [...new Set(schoolNames.filter(Boolean).map(s => s.toLowerCase()))];
-  const result = { schoolHelmets: {}, placeholder: null, locked: null };
+  const result = {
+    schoolHelmets: {},
+    placeholder: null,
+    locked: null,
+    bars: null,
+    logo: null
+  };
 
   if (lowered.length > 0) {
     const res = await db.query(
@@ -264,7 +292,7 @@ export async function resolvePhotos(db, schoolNames) {
 
   const specials = await db.query(
     `SELECT type, google_file_id FROM program_photos
-      WHERE type IN ('Placeholder Helmet', 'Locked Image')
+      WHERE type IN ('Placeholder Helmet', 'Locked Image', 'Bars', 'Logo')
       ORDER BY id ASC`
   );
   for (const r of specials.rows) {
@@ -273,6 +301,12 @@ export async function resolvePhotos(db, schoolNames) {
     }
     if (r.type === 'Locked Image' && !result.locked) {
       result.locked = driveImageUrl(r.google_file_id, 'w600');
+    }
+    if (r.type === 'Bars' && !result.bars) {
+      result.bars = driveImageUrl(r.google_file_id, 'w600');
+    }
+    if (r.type === 'Logo' && !result.logo) {
+      result.logo = driveImageUrl(r.google_file_id, 'w400');
     }
   }
   return result;

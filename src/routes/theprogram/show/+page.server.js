@@ -56,6 +56,7 @@ export async function load() {
       else { display = { schools: [] }; kind = 'unknown'; }
 
       for (const s of display.schools ?? []) allSchools.add(s.school);
+      if (display.committedSchool) allSchools.add(display.committedSchool);
 
       const savedResult = ev.rows.find(r => r.result)?.result ?? null;
 
@@ -77,9 +78,13 @@ export async function load() {
         ...s,
         helmet: helmetForSchool(photos, s.school)
       }));
+      // Attach a helmet URL for the committed school for steal events (in case
+      // it isn't already in display.schools).
+      if (ev.display.committedSchool) {
+        ev.display.committedSchoolHelmet = helmetForSchool(photos, ev.display.committedSchool);
+      }
     }
 
-    // Group into conferences and assign per-conference indices.
     const byConf = new Map();
     for (const ev of decorated) {
       if (!byConf.has(ev.conference)) byConf.set(ev.conference, []);
@@ -108,7 +113,8 @@ export async function load() {
       events: decorated,
       conferenceList,
       placeholderHelmet: photos.placeholder,
-      lockedImage: photos.locked
+      lockedImage: photos.locked,
+      barsImage: photos.bars
     };
   } finally {
     await db.end();

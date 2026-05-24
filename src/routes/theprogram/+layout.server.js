@@ -1,4 +1,6 @@
 import { redirect, error } from '@sveltejs/kit';
+import { createClient } from '$lib/server/db.js';
+import { driveImageUrl } from '$lib/server/theprogram/show.js';
 
 export async function load({ parent, url }) {
   const { session, profile } = await parent();
@@ -12,5 +14,20 @@ export async function load({ parent, url }) {
     throw error(403, 'Access denied — The Program is for commissioners and admins only.');
   }
 
-  return {};
+  // Look up the brand logo for the nav
+  let logoUrl = null;
+  const db = await createClient();
+  try {
+    const res = await db.query(
+      `SELECT google_file_id FROM program_photos
+        WHERE type = 'Logo' ORDER BY id ASC LIMIT 1`
+    );
+    if (res.rows.length > 0) logoUrl = driveImageUrl(res.rows[0].google_file_id, 'w400');
+  } catch {
+    // If the photos table isn't there yet, just fall back to text branding.
+  } finally {
+    await db.end();
+  }
+
+  return { tpLogoUrl: logoUrl };
 }

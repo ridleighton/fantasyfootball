@@ -1,6 +1,6 @@
 <script>
   import { page } from '$app/stores';
-  let { children } = $props();
+  let { data, children } = $props();
 
   const showNav = $derived($page.route.id !== '/theprogram');
 
@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Alfa+Slab+One&family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap"
     rel="stylesheet"
   />
 </svelte:head>
@@ -25,10 +25,16 @@
   {#if showNav}
     <nav class="tp-nav">
       <div class="tp-nav-inner">
-        <div class="tp-brand">
-          <span class="tp-brand-pennant" aria-hidden="true">⚑</span>
-          <span class="tp-brand-text">The Program</span>
-        </div>
+        <a href="/theprogram/" class="tp-brand" aria-label="The Program">
+          {#if data?.tpLogoUrl}
+            <img src={data.tpLogoUrl} alt="The Program" class="tp-brand-logo" referrerpolicy="no-referrer" />
+          {:else}
+            <span class="tp-brand-text">
+              <span class="tp-brand-the">The</span>
+              <span class="tp-brand-program">Program</span>
+            </span>
+          {/if}
+        </a>
         <div class="tp-nav-links">
           {#each navItems as item}
             <a
@@ -50,28 +56,37 @@
 
 <style>
   /* ============================================================
-     Vintage Varsity — Blue
-     Tokens cascade to every nested page via CSS custom properties.
+     Vintage Varsity — Crimson (pulled from the logo)
      ============================================================ */
   .tp-app {
-    --tp-navy: #0F2A47;
-    --tp-navy-2: #15355A;
-    --tp-navy-dark: #091B30;
+    /* Primary chrome */
+    --tp-navy: #B8252C;       /* repurposed token: crimson */
+    --tp-navy-2: #C73238;     /* lighter crimson */
+    --tp-navy-dark: #8C1B22;  /* deeper crimson */
+    /* Surfaces */
     --tp-cream: #F4ECDD;
     --tp-cream-2: #EBE0CB;
     --tp-cream-3: #DDD0B4;
-    --tp-gold: #C8A24A;
-    --tp-gold-2: #B58E38;
-    --tp-gold-soft: #E2C783;
+    /* Accent */
+    --tp-gold: #D9A441;
+    --tp-gold-2: #B98624;
+    --tp-gold-soft: #ECC880;
+    /* Pewter (chrome bevel from the logo) */
+    --tp-pewter: #BFB8AD;
+    --tp-pewter-2: #8F8979;
+    /* Warning / oxblood */
     --tp-oxblood: #7A1F2B;
     --tp-oxblood-soft: #A03A47;
-    --tp-ink: #1A1410;
-    --tp-ink-soft: #443A2C;
-    --tp-muted: #6B5E47;
-    --tp-rule: rgba(15, 42, 71, 0.22);
-    --tp-rule-soft: rgba(15, 42, 71, 0.10);
+    /* Ink */
+    --tp-ink: #2B1815;
+    --tp-ink-soft: #5B3F38;
+    --tp-muted: #7A6A55;
+    /* Rules */
+    --tp-rule: rgba(184, 37, 44, 0.28);
+    --tp-rule-soft: rgba(184, 37, 44, 0.12);
 
-    --tp-display: 'Oswald', 'Bebas Neue', 'Impact', sans-serif;
+    --tp-display: 'Alfa Slab One', 'Oswald', 'Bebas Neue', 'Impact', serif;
+    --tp-display-condensed: 'Oswald', 'Bebas Neue', 'Impact', sans-serif;
     --tp-body: 'Lora', 'Caslon', Georgia, 'Times New Roman', serif;
 
     min-height: 100vh;
@@ -83,19 +98,17 @@
 
   .tp-app :global(*) { box-sizing: border-box; }
 
-  /* Headings + display caps.
-     :where() keeps specificity at 0 so per-page color overrides win
-     (e.g. cream player names on the Oxford backdrop of The Show). */
+  /* Headings — keep specificity at 0 so per-page color wins */
   .tp-app :global(:where(h1, h2, h3)) {
-    font-family: var(--tp-display);
+    font-family: var(--tp-display-condensed);
     color: var(--tp-navy);
     letter-spacing: 0.02em;
     margin: 0;
   }
 
-  /* Stamps — week numbers, conference badges, "WEEK 7" tags */
+  /* Stamps — week numbers, conference badges */
   .tp-app :global(.tp-stamp) {
-    font-family: var(--tp-display);
+    font-family: var(--tp-display-condensed);
     font-weight: 700;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -107,7 +120,7 @@
   }
   .tp-app :global(.tp-stamp-gold) {
     background: var(--tp-gold);
-    color: var(--tp-navy);
+    color: var(--tp-navy-dark);
   }
   .tp-app :global(.tp-stamp-oxblood) {
     background: var(--tp-oxblood);
@@ -135,14 +148,74 @@
     letter-spacing: 0.4em;
   }
 
-  /* Pill button — primary (gold) and secondary (navy on cream) */
+  /* "Small word + big word" stacked head (THE • PROGRAM rhythm).
+     Usage:
+       <h1 class="tp-stack-head">
+         <span class="tp-stack-small">The</span>
+         <span class="tp-stack-big">Draft Board</span>
+       </h1>
+  */
+  .tp-app :global(.tp-stack-head) {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .tp-app :global(.tp-stack-small) {
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 0.3em;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--tp-gold);
+    transform: translateY(-0.25em);
+  }
+  .tp-app :global(.tp-stack-big) {
+    font-family: var(--tp-display);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  /* Three-layer "stamped" display treatment (crimson fill, gold outline,
+     pewter outer trim). Use for hero headlines on cream backdrops. */
+  .tp-app :global(.tp-stamped) {
+    color: var(--tp-navy);
+    text-shadow:
+      -1px -1px 0 var(--tp-gold),
+       1px -1px 0 var(--tp-gold),
+      -1px  1px 0 var(--tp-gold),
+       1px  1px 0 var(--tp-gold),
+      -2px -2px 0 var(--tp-pewter),
+       2px -2px 0 var(--tp-pewter),
+      -2px  2px 0 var(--tp-pewter),
+       2px  2px 0 var(--tp-pewter),
+       0  4px 0 var(--tp-pewter-2),
+       0  6px 0 rgba(0, 0, 0, 0.18);
+  }
+  /* Cream-fill variant for crimson backdrops */
+  .tp-app :global(.tp-stamped-cream) {
+    color: var(--tp-cream);
+    text-shadow:
+      -1px -1px 0 var(--tp-gold),
+       1px -1px 0 var(--tp-gold),
+      -1px  1px 0 var(--tp-gold),
+       1px  1px 0 var(--tp-gold),
+      -2px -2px 0 var(--tp-pewter),
+       2px -2px 0 var(--tp-pewter),
+      -2px  2px 0 var(--tp-pewter),
+       2px  2px 0 var(--tp-pewter),
+       0  4px 0 var(--tp-navy-dark),
+       0  8px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Pill buttons */
   .tp-app :global(.tp-pill) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     padding: 14px 28px;
-    font-family: var(--tp-display);
+    font-family: var(--tp-display-condensed);
     font-weight: 700;
     font-size: 15px;
     letter-spacing: 0.18em;
@@ -165,7 +238,7 @@
   .tp-app :global(.tp-pill-gold) {
     background: var(--tp-gold);
     border-color: var(--tp-gold-2);
-    color: var(--tp-navy);
+    color: var(--tp-navy-dark);
     box-shadow: inset 0 -2px 0 var(--tp-gold-2);
   }
   .tp-app :global(.tp-pill-gold:hover:not(:disabled)) {
@@ -192,7 +265,7 @@
     border-radius: 6px;
     box-shadow:
       inset 0 0 0 1px rgba(244, 236, 221, 0.9),
-      0 1px 0 rgba(15, 42, 71, 0.06);
+      0 1px 0 rgba(184, 37, 44, 0.06);
   }
 
   /* Form fields with notebook feel */
@@ -210,12 +283,12 @@
   .tp-app :global(.tp-field:focus) {
     outline: none;
     border-color: var(--tp-gold-2);
-    box-shadow: 0 0 0 3px rgba(200, 162, 74, 0.25);
+    box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.3);
     background: var(--tp-cream);
   }
   .tp-app :global(.tp-label) {
     display: block;
-    font-family: var(--tp-display);
+    font-family: var(--tp-display-condensed);
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
@@ -224,7 +297,6 @@
     margin-bottom: 6px;
   }
 
-  /* Alert states */
   .tp-app :global(.tp-alert) {
     padding: 12px 16px;
     border-radius: 4px;
@@ -238,9 +310,9 @@
     color: var(--tp-oxblood);
   }
   .tp-app :global(.tp-alert-ok) {
-    background: rgba(200, 162, 74, 0.12);
+    background: rgba(217, 164, 65, 0.14);
     border: 1px solid var(--tp-gold-2);
-    color: var(--tp-navy);
+    color: var(--tp-navy-dark);
   }
 
   /* ============================================================
@@ -263,20 +335,37 @@
     gap: 24px;
   }
   .tp-brand {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    font-family: var(--tp-display);
+    text-decoration: none;
+    color: var(--tp-cream);
+    gap: 12px;
+  }
+  .tp-brand-logo {
+    height: 40px;
+    width: auto;
+    display: block;
+  }
+  .tp-brand-text {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 1;
+  }
+  .tp-brand-the {
+    font-family: var(--tp-display-condensed);
     font-weight: 700;
-    font-size: 18px;
-    letter-spacing: 0.18em;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--tp-gold);
+  }
+  .tp-brand-program {
+    font-family: var(--tp-display);
+    font-size: 22px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--tp-cream);
-  }
-  .tp-brand-pennant {
-    color: var(--tp-gold);
-    font-size: 18px;
-    line-height: 1;
   }
   .tp-nav-links { display: flex; gap: 6px; }
   .tp-nav-link {
@@ -284,7 +373,7 @@
     border-radius: 2px;
     text-decoration: none;
     color: var(--tp-cream);
-    font-family: var(--tp-display);
+    font-family: var(--tp-display-condensed);
     font-weight: 600;
     font-size: 13px;
     letter-spacing: 0.16em;

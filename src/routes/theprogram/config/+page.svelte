@@ -38,7 +38,10 @@
 <div class="cf">
   <header class="cf-head">
     <div class="cf-eyebrow">House Records</div>
-    <h1 class="cf-title">Config</h1>
+    <h1 class="cf-title tp-stack-head">
+      <span class="tp-stack-small">The</span>
+      <span class="tp-stack-big">Config</span>
+    </h1>
     <p class="cf-sub">
       Conferences, schools, and photo assets — kept in good order.
       {#if lastSavedAt}<span class="cf-saved">Saved at {lastSavedAt}</span>{/if}

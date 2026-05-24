@@ -24,6 +24,8 @@ function calculatedOddsStr(group) {
 
 function outcomeFor(group) {
   const winner = group.rows.find(r => r.result)?.result ?? null;
+  const committedSchool =
+    group.rows.find(r => (r.committed_school ?? '').trim())?.committed_school?.trim() ?? null;
   const isLocked = group.rows.some(r => r.locked === true);
   const schoolsSet = new Set(group.rows.map(r => (r.school ?? '').trim()).filter(Boolean));
   const schoolCount = schoolsSet.size;
@@ -34,15 +36,8 @@ function outcomeFor(group) {
     return `Committed to ${winner}`;
   }
   if (group.type === 'Steal') {
-    if (winner === 'LOCKED' || isLocked) return 'Steal failed — locked';
-    const winningRow = group.rows.find(r => (r.school ?? '').trim() === winner);
-    if (winningRow?.in_original_roll === false) {
-      return `Steal succeeded — moved to ${winner}`;
-    }
-    // If winner matches the player's original school we'd call it a loss; otherwise success.
-    // Spec lists "Steal failed — lost roll" — interpret as a steal where the winner was already
-    // in the original roll (not a fresh school).
-    if (winningRow?.in_original_roll === true) {
+    if (isLocked) return 'Steal failed — locked';
+    if (committedSchool && winner.toLowerCase() === committedSchool.toLowerCase()) {
       return 'Steal failed — lost roll';
     }
     return `Steal succeeded — moved to ${winner}`;

@@ -54,7 +54,10 @@
   <header class="cv-head">
     <div class="cv-head-l">
       <div class="cv-eyebrow">Recruiting Show — Editorial</div>
-      <h1 class="cv-title">Commish View</h1>
+      <h1 class="cv-title tp-stack-head">
+        <span class="tp-stack-small">The</span>
+        <span class="tp-stack-big">Commish View</span>
+      </h1>
       <div class="cv-meta">
         <span class="tp-stamp">Week {data.weekNumber}</span>
         <span class="cv-count">{rows.length} entr{rows.length === 1 ? 'y' : 'ies'}</span>

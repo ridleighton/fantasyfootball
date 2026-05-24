@@ -25,9 +25,12 @@
     </div>
 
     <div class="entry-eyebrow">Down Bad for Ghost — Recruiting Show</div>
-    <h1 class="entry-title">The Program</h1>
-    <div class="entry-week-stamp">
-      <span class="tp-stamp tp-stamp-gold">Week {weekNumber || '—'}</span>
+    <h1 class="entry-title tp-stack-head">
+      <span class="tp-stack-small">The</span>
+      <span class="tp-stack-big tp-stamped">Program</span>
+    </h1>
+    <div class="entry-week-stamp tp-stamped" style="font-size:48px;font-family:var(--tp-display);letter-spacing:0.04em;">
+      Week {weekNumber || '—'}
     </div>
 
     {#if form?.message}
@@ -194,14 +197,21 @@
     margin-bottom: 10px;
   }
   .entry-title {
+    font-family: var(--tp-display);
     font-size: 64px;
-    font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    margin: 0 0 14px;
+    margin: 0 0 18px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .entry-week-stamp {
+    margin: 12px 0 32px;
+    text-transform: uppercase;
     line-height: 1;
   }
-  .entry-week-stamp { margin-bottom: 32px; }
 
   .entry-grid {
     display: grid;

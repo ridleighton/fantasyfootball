@@ -411,7 +411,7 @@
 
     <header class="launcher-head">
       <div class="launcher-eyebrow">Now Entering</div>
-      <h1 class="launcher-title">Conference {currentConf.name}</h1>
+      <h1 class="launcher-title">{currentConf.name}</h1>
       <div class="launcher-meta">
         <span class="tp-stamp tp-stamp-gold">Week {data.weekNumber}</span>
         <span class="launcher-count">{currentConf.rolledCount} / {currentConf.total} rolled</span>

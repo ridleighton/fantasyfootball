@@ -440,14 +440,14 @@
     {#if rollState === 'revealed'}
       {#if rollOutcome === 'steal_failed_locked'}
         <div class="reveal-stage locked">
-          <div class="reveal-imgwrap">
+          <div class="locked-wrap">
             {#if data.lockedImage}
               <img src={data.lockedImage} alt="Locked" class="locked-img" referrerpolicy="no-referrer" />
             {:else if currentEvent.display.committedSchoolHelmet}
               <img src={currentEvent.display.committedSchoolHelmet} alt={currentEvent.display.committedSchool ?? ''} class="locked-img" referrerpolicy="no-referrer" />
             {/if}
+            <div class="locked-slap" aria-label="Steal failed">STEAL<br/>FAILED</div>
           </div>
-          <div class="locked-headline tp-stamped-cream">Steal Failed — Locked</div>
         </div>
       {:else if rollWinner}
         {@const winnerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
@@ -470,11 +470,14 @@
               {/if}
             </div>
             <div class="winner-ring" aria-hidden="true"></div>
-          </div>
 
-          {#if isStealSuccess()}
-            <div class="stolen-slap" aria-label="Stolen">STOLEN</div>
-          {/if}
+            {#if isStealSuccess()}
+              <div class="stolen-slap" aria-label="Stolen">STOLEN</div>
+            {/if}
+            {#if isStealFailedNotLocked()}
+              <div class="failed-slap" aria-label="Steal failed">STEAL<br/>FAILED</div>
+            {/if}
+          </div>
 
           <div class="winner-name tp-stamped-cream">
             {rollWinner}
@@ -482,10 +485,6 @@
               <span class="winner-pct">{winnerPct.toFixed(1)}%</span>
             {/if}
           </div>
-
-          {#if isStealFailedNotLocked()}
-            <div class="failed-tag">Steal Failed — Stayed Loyal</div>
-          {/if}
         </div>
       {:else}
         <div class="reveal-stage">
@@ -619,16 +618,6 @@
             Next: {nextConference.name} →
           </button>
         {/if}
-      {:else}
-        <button
-          class="tp-pill tp-pill-gold tp-pill-big"
-          onclick={() => {
-            const next = currentConf.events.findIndex(e => !e.savedResult);
-            if (next !== -1) goToEvent(next);
-          }}
-        >
-          Start from first unrolled →
-        </button>
       {/if}
 
       <div class="launcher-jump">
@@ -798,14 +787,6 @@
     font-family: var(--tp-body);
     box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
     position: relative;
-  }
-  .recruit-card::before {
-    content: '';
-    position: absolute;
-    inset: 4px;
-    border: 1px solid var(--tp-gold);
-    border-radius: 2px;
-    pointer-events: none;
   }
   .recruit-card:hover {
     transform: translateY(-2px);
@@ -993,23 +974,12 @@
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
     position: relative;
   }
-  .school-card::before {
-    content: '';
-    position: absolute;
-    inset: 4px;
-    border: 1px solid var(--tp-gold);
-    border-radius: 2px;
-    pointer-events: none;
-  }
   .school-card.ineligible { background: rgba(244, 236, 221, 0.55); }
   .school-card.committed {
     border-color: var(--tp-gold);
     box-shadow:
       0 0 0 3px var(--tp-gold),
       0 6px 0 rgba(0, 0, 0, 0.3);
-  }
-  .school-card.committed::before {
-    border-color: var(--tp-navy);
   }
   .committed-banner {
     position: absolute;
@@ -1169,61 +1139,67 @@
     text-shadow: 0 2px 0 var(--tp-navy-dark);
   }
 
-  /* STOLEN slap */
-  .stolen-slap {
-    position: relative;
-    display: inline-block;
-    margin: 6px 0 18px;
+  /* Slap overlays — sit on top of the winner / locked card */
+  .stolen-slap,
+  .failed-slap,
+  .locked-slap {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-8deg);
     font-family: var(--tp-display);
-    font-size: clamp(72px, 14vw, 180px);
-    letter-spacing: 0.06em;
-    color: var(--tp-gold);
+    letter-spacing: 0.04em;
+    color: var(--tp-cream);
     text-transform: uppercase;
-    line-height: 0.9;
-    transform: rotate(-6deg);
+    line-height: 0.85;
+    text-align: center;
+    pointer-events: none;
+    z-index: 5;
     text-shadow:
       -3px -3px 0 var(--tp-navy-dark),
        3px -3px 0 var(--tp-navy-dark),
       -3px  3px 0 var(--tp-navy-dark),
        3px  3px 0 var(--tp-navy-dark),
-      -6px -6px 0 var(--tp-pewter),
-       6px -6px 0 var(--tp-pewter),
-      -6px  6px 0 var(--tp-pewter),
-       6px  6px 0 var(--tp-pewter),
-       0 12px 30px rgba(0, 0, 0, 0.6);
+       0 0 12px rgba(0, 0, 0, 0.9),
+       0 14px 30px rgba(0, 0, 0, 0.55);
     animation: slap 0.4s cubic-bezier(0.18, 1.4, 0.5, 1);
   }
-  @keyframes slap {
-    from { transform: rotate(-6deg) scale(0.3); opacity: 0; }
-    60%  { transform: rotate(-6deg) scale(1.15); opacity: 1; }
-    to   { transform: rotate(-6deg) scale(1); }
+  .stolen-slap {
+    font-size: clamp(80px, 14vw, 200px);
+    color: var(--tp-cream);
+    text-shadow:
+      -3px -3px 0 var(--tp-navy-dark),
+       3px -3px 0 var(--tp-navy-dark),
+      -3px  3px 0 var(--tp-navy-dark),
+       3px  3px 0 var(--tp-navy-dark),
+      -6px -6px 0 var(--tp-gold),
+       6px -6px 0 var(--tp-gold),
+      -6px  6px 0 var(--tp-gold),
+       6px  6px 0 var(--tp-gold),
+       0 14px 36px rgba(0, 0, 0, 0.7);
   }
-  .failed-tag {
-    margin-top: 12px;
-    font-family: var(--tp-display-condensed);
-    font-size: 18px;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-    color: var(--tp-oxblood-soft);
+  .failed-slap,
+  .locked-slap {
+    font-size: clamp(56px, 9vw, 124px);
+    color: var(--tp-cream);
+  }
+  @keyframes slap {
+    from { transform: translate(-50%, -50%) rotate(-8deg) scale(0.3); opacity: 0; }
+    60%  { transform: translate(-50%, -50%) rotate(-8deg) scale(1.15); opacity: 1; }
+    to   { transform: translate(-50%, -50%) rotate(-8deg) scale(1); }
   }
 
-  .reveal-imgwrap { display: inline-block; }
+  /* Locked steal layout */
+  .locked-wrap { position: relative; display: inline-block; }
   .reveal-stage.locked .locked-img {
-    width: 280px;
-    height: 280px;
+    width: 320px;
+    height: 320px;
     object-fit: contain;
     background: var(--tp-cream);
     border: 2px solid var(--tp-oxblood);
     border-radius: 6px;
     padding: 16px;
-    margin-bottom: 18px;
     box-shadow: 0 0 0 6px rgba(122, 31, 43, 0.25), 0 8px 30px rgba(0, 0, 0, 0.45);
-  }
-  .locked-headline {
-    font-family: var(--tp-display);
-    font-size: clamp(36px, 5vw, 56px);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
   .quip {
     font-family: var(--tp-body);

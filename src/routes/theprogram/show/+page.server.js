@@ -90,7 +90,16 @@ export async function load() {
       if (!byConf.has(ev.conference)) byConf.set(ev.conference, []);
       byConf.get(ev.conference).push(ev);
     }
+    // Sort each conference by type (Steal → Auto-Commit → Commit) then
+    // alphabetically by player within type.
+    const TYPE_ORDER = { 'Steal': 0, 'Auto-Commit': 1, 'Commit': 2 };
     for (const [, list] of byConf) {
+      list.sort((a, b) => {
+        const ta = TYPE_ORDER[a.type] ?? 99;
+        const tb = TYPE_ORDER[b.type] ?? 99;
+        if (ta !== tb) return ta - tb;
+        return (a.player ?? '').localeCompare(b.player ?? '', undefined, { sensitivity: 'base' });
+      });
       list.forEach((ev, i) => { ev.confIndex = i; });
     }
 

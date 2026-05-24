@@ -65,6 +65,9 @@
 
   const displayName = $derived(data.profile?.display_name ?? '');
   const initial = $derived(displayName.charAt(0).toUpperCase() || '?');
+
+  // The Program section uses its own immersive chrome
+  const isProgram = $derived($page.url.pathname.startsWith('/theprogram'));
 </script>
 
 <svelte:head>
@@ -73,7 +76,7 @@
 
 
 <!-- Desktop navbar -->
-{#if data.session}
+{#if data.session && !isProgram}
   <nav class="navbar">
     <a href="/" class="db-brand">
       <span class="db-brand-mark">👻</span>
@@ -169,6 +172,8 @@
   {@render children()}
 </main>
 
-<footer class="db-footer">
-  not affiliated with ghost energy, taylor swift, the nfl, or anyone referenced on this site. just big fans of all of them.
-</footer>
+{#if !isProgram}
+  <footer class="db-footer">
+    not affiliated with ghost energy, taylor swift, the nfl, or anyone referenced on this site. just big fans of all of them.
+  </footer>
+{/if}

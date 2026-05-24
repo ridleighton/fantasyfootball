@@ -1,31 +1,61 @@
+// ---------------- Drive image URL ----------------
+// The classic `uc?export=view&id=…` link now serves an interstitial page in many cases.
+// The thumbnail endpoint still returns the raw image and respects size hints.
+export function driveImageUrl(id, size = 'w800') {
+  if (!id) return null;
+  return `https://drive.google.com/thumbnail?id=${id}&sz=${size}`;
+}
+
 // ---------------- Odds parsing ----------------
 
-// Tolerantly extract a numeric percentage from a free-form string.
-// Accepts: "40%", "40", "Texas 40%", "+150" → null (only %), "0.42" → 42, "33.3%", etc.
+// Extract a single numeric percentage from a free-form string.
 export function parseOddsPercent(s) {
   if (s == null) return null;
   const str = String(s).trim();
   if (!str) return null;
-  // Prefer "<num>%" if present
   const pct = str.match(/(-?\d+(?:\.\d+)?)\s*%/);
   if (pct) return Number.parseFloat(pct[1]);
-  // Fallback: bare number (e.g. "40" or "0.4")
   const num = str.match(/(-?\d+(?:\.\d+)?)/);
   if (!num) return null;
   const n = Number.parseFloat(num[1]);
   if (Number.isNaN(n)) return null;
-  // If 0 <= n <= 1 treat as fraction
   if (n > 0 && n <= 1) return n * 100;
   return n;
 }
 
+// Parse a free-form odds string into [{ school, percent }, ...].
+// Accepts forms like:
+//   "Texas 40%, Oklahoma 35%, USC 25%"
+//   "Texas: 40 | Oklahoma: 35 | USC: 25"
+//   "Texas (40%); Oklahoma (35%)"
+//   "Texas-40, Oklahoma-35"
+//   "Texas 40%\nOklahoma 35%"
+export function parseOddsPairs(s) {
+  if (s == null) return [];
+  const str = String(s).trim();
+  if (!str) return [];
+
+  const chunks = str.split(/[,|;\n]+/).map(c => c.trim()).filter(Boolean);
+  const pairs = [];
+  for (const chunk of chunks) {
+    // Find the last numeric token in the chunk; everything before is school name.
+    const numMatch = chunk.match(/(-?\d+(?:\.\d+)?)\s*%?\s*\)?$/);
+    if (!numMatch) continue;
+    const numStart = chunk.lastIndexOf(numMatch[0]);
+    let school = chunk.slice(0, numStart).trim();
+    // Strip trailing punctuation/separators
+    school = school.replace(/[:\-–—()[\]\s]+$/, '').trim();
+    school = school.replace(/^[([\s]+/, '').trim();
+    if (!school) continue;
+    const percent = Number.parseFloat(numMatch[1]);
+    if (Number.isNaN(percent)) continue;
+    pairs.push({ school, percent });
+  }
+  return pairs;
+}
+
 // ---------------- Grouping ----------------
 
-// Group rows into events by player + conference.
-// Returns an ordered list of events: { conference, player, type, rows: [...] }
-// Within a conference, groups appear in the order their first row appears.
-// Conferences are ordered per `conferenceOrder` (array of conference names in order).
-// Rows whose conference is not in conferenceOrder are appended at the end alphabetically.
 export function groupEvents(rows, conferenceOrder) {
   const byConference = new Map();
   for (const row of rows) {
@@ -70,19 +100,36 @@ export function commitThreshold(schoolCount) {
   return 15;
 }
 
-// Build commit-roll display data: per-school percentages + eligibility, normalized.
-// Input: group rows. Each row contributes its `school` and parsed odds.
-// Returns: { schools: [{ school, raw, normalized, eligible }], threshold }
+// Build commit-roll display data: parse the odds string for school→percentage pairs.
+// Falls back to per-row (school column + odds column) if the odds string doesn't yield
+// multiple pairs.
 export function computeCommit(group) {
-  const buckets = new Map(); // school → raw percentage (sum if duplicates)
+  // Prefer parsing the odds string. Use the first non-empty odds value in the group.
+  let pairs = [];
   for (const r of group.rows) {
-    const sch = (r.school ?? '').trim();
-    if (!sch) continue;
-    const pct = parseOddsPercent(r.odds);
-    if (pct == null) continue;
-    buckets.set(sch, (buckets.get(sch) ?? 0) + pct);
+    const found = parseOddsPairs(r.odds);
+    if (found.length >= 2) { pairs = found; break; }
   }
-  const list = [...buckets.entries()].map(([school, raw]) => ({ school, raw }));
+
+  if (pairs.length === 0) {
+    // Fallback: one school per row, school in `school`, percentage in `odds`.
+    const buckets = new Map();
+    for (const r of group.rows) {
+      const sch = (r.school ?? '').trim();
+      if (!sch) continue;
+      const pct = parseOddsPercent(r.odds);
+      if (pct == null) continue;
+      buckets.set(sch, (buckets.get(sch) ?? 0) + pct);
+    }
+    pairs = [...buckets.entries()].map(([school, percent]) => ({ school, percent }));
+  } else {
+    // De-duplicate school names (last occurrence wins)
+    const dedup = new Map();
+    for (const p of pairs) dedup.set(p.school, p.percent);
+    pairs = [...dedup.entries()].map(([school, percent]) => ({ school, percent }));
+  }
+
+  const list = pairs.map(p => ({ school: p.school, raw: p.percent }));
   const threshold = commitThreshold(list.length);
   for (const s of list) s.eligible = s.raw >= threshold;
   const totalEligible = list.reduce((a, s) => a + (s.eligible ? s.raw : 0), 0);
@@ -92,7 +139,8 @@ export function computeCommit(group) {
   return { schools: list, threshold };
 }
 
-// Build steal display: equal weights across rows' schools, plus locked detection.
+// Steal: equal weights, no threshold. `eligible` is always true here so no
+// "below cut" / threshold text ever surfaces for steals.
 export function computeSteal(group) {
   const isLocked = group.rows.some(r => r.locked === true);
   const schoolsSet = new Set();
@@ -104,11 +152,11 @@ export function computeSteal(group) {
   const pct = schools.length > 0 ? 100 / schools.length : 0;
   return {
     locked: isLocked,
-    schools: schools.map(s => ({ school: s, normalized: pct, eligible: !isLocked }))
+    schools: schools.map(s => ({ school: s, normalized: pct, eligible: true, raw: pct }))
   };
 }
 
-// Auto-commit display: equal weights; if only one school, no roll.
+// Auto-commit: equal weights; if only one school, no roll.
 export function computeAutoCommit(group) {
   const schoolsSet = new Set();
   for (const r of group.rows) {
@@ -120,7 +168,7 @@ export function computeAutoCommit(group) {
   const pct = schools.length > 0 ? 100 / schools.length : 0;
   return {
     solo,
-    schools: schools.map(s => ({ school: s, normalized: pct, eligible: true }))
+    schools: schools.map(s => ({ school: s, normalized: pct, eligible: true, raw: pct }))
   };
 }
 
@@ -137,8 +185,7 @@ export function weightedPick(items, rng = Math.random) {
   return items[items.length - 1].value;
 }
 
-// ---------------- Roll execution (returns winner + outcome label) ----------------
-// Caller decides whether to write to DB; this function is pure.
+// ---------------- Roll execution ----------------
 
 export function executeRoll(group) {
   const type = (group.type ?? '').trim();
@@ -165,7 +212,6 @@ export function executeRoll(group) {
     const winner = weightedPick(
       data.schools.map(s => ({ value: s.school, weight: s.normalized }))
     );
-    // Determine whether the winning school's row had in_original_roll = false
     const winningRow = group.rows.find(r => (r.school ?? '').trim() === winner);
     const cameLate = winningRow?.in_original_roll === false;
     return {
@@ -195,10 +241,6 @@ export function executeRoll(group) {
 
 // ---------------- Photo resolution ----------------
 
-const driveUrl = (id) => `https://drive.google.com/uc?export=view&id=${id}`;
-
-// Resolve a map: schoolName(lowercased) -> google_file_id (one chosen at random per group).
-// Also returns special photos by type.
 export async function resolvePhotos(db, schoolNames) {
   const lowered = [...new Set(schoolNames.filter(Boolean).map(s => s.toLowerCase()))];
   const result = { schoolHelmets: {}, placeholder: null, locked: null };
@@ -209,7 +251,6 @@ export async function resolvePhotos(db, schoolNames) {
         WHERE type = 'School Helmet' AND LOWER(school) = ANY($1::text[])`,
       [lowered]
     );
-    // group by lowercased school, pick one at random
     const grouped = new Map();
     for (const r of res.rows) {
       const k = (r.school ?? '').toLowerCase();
@@ -217,7 +258,7 @@ export async function resolvePhotos(db, schoolNames) {
       grouped.get(k).push(r.google_file_id);
     }
     for (const [k, ids] of grouped) {
-      result.schoolHelmets[k] = driveUrl(ids[Math.floor(Math.random() * ids.length)]);
+      result.schoolHelmets[k] = driveImageUrl(ids[Math.floor(Math.random() * ids.length)]);
     }
   }
 
@@ -227,8 +268,12 @@ export async function resolvePhotos(db, schoolNames) {
       ORDER BY id ASC`
   );
   for (const r of specials.rows) {
-    if (r.type === 'Placeholder Helmet' && !result.placeholder) result.placeholder = driveUrl(r.google_file_id);
-    if (r.type === 'Locked Image' && !result.locked) result.locked = driveUrl(r.google_file_id);
+    if (r.type === 'Placeholder Helmet' && !result.placeholder) {
+      result.placeholder = driveImageUrl(r.google_file_id, 'w600');
+    }
+    if (r.type === 'Locked Image' && !result.locked) {
+      result.locked = driveImageUrl(r.google_file_id, 'w600');
+    }
   }
   return result;
 }

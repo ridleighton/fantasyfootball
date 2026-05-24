@@ -40,13 +40,13 @@ export async function load() {
         weekNumber,
         hasOrder: false,
         conferences: CONFERENCES,
-        events: []
+        events: [],
+        conferenceList: []
       };
     }
 
     const events = groupEvents(rowsRes.rows, conferenceOrder);
 
-    // Pre-compute display data per event and collect school names for photo lookup.
     const allSchools = new Set();
     const decorated = events.map((ev, i) => {
       let display, kind;
@@ -57,11 +57,10 @@ export async function load() {
 
       for (const s of display.schools ?? []) allSchools.add(s.school);
 
-      // Use any row's saved result to indicate this event has been rolled.
       const savedResult = ev.rows.find(r => r.result)?.result ?? null;
 
       return {
-        index: i,
+        globalIndex: i,
         conference: ev.conference,
         player: ev.player,
         type: ev.type,
@@ -80,11 +79,34 @@ export async function load() {
       }));
     }
 
+    // Group into conferences and assign per-conference indices.
+    const byConf = new Map();
+    for (const ev of decorated) {
+      if (!byConf.has(ev.conference)) byConf.set(ev.conference, []);
+      byConf.get(ev.conference).push(ev);
+    }
+    for (const [, list] of byConf) {
+      list.forEach((ev, i) => { ev.confIndex = i; });
+    }
+
+    const conferenceList = conferenceOrder
+      .filter(c => byConf.has(c))
+      .map(name => {
+        const events = byConf.get(name) ?? [];
+        return {
+          name,
+          events,
+          total: events.length,
+          rolledCount: events.filter(e => e.savedResult).length
+        };
+      });
+
     return {
       weekId,
       weekNumber,
       hasOrder: true,
       events: decorated,
+      conferenceList,
       placeholderHelmet: photos.placeholder,
       lockedImage: photos.locked
     };

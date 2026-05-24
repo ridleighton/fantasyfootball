@@ -12,7 +12,7 @@
   let tempId = -1;
 
   function driveUrl(id) {
-    return id ? `https://drive.google.com/uc?export=view&id=${id}` : null;
+    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : null;
   }
 
   function addConference() { conferences.push({ id: tempId--, name: '' }); }

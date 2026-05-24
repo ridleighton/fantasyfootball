@@ -40,7 +40,9 @@
         throw new Error(t || 'Could not save order');
       }
       await invalidateAll();
-      await goto('/theprogram/show?event=0', { invalidateAll: true });
+      // Go to first conference launcher
+      const first = (data.conferenceList?.[0]?.name) ?? order[0];
+      await goto(`/theprogram/show?conf=${encodeURIComponent(first)}`, { invalidateAll: true });
     } catch (e) {
       orderError = e.message;
     } finally {
@@ -48,23 +50,46 @@
     }
   }
 
-  // ---------- Event display + rolling ----------
-  const currentIndex = $derived(
-    Math.max(0, Number.parseInt($page.url.searchParams.get('event') ?? '0', 10) || 0)
-  );
-  const events = $derived(data.events ?? []);
-  const currentEvent = $derived(events[currentIndex] ?? null);
-  const isLastEvent = $derived(currentIndex >= events.length - 1);
-  const isFinished = $derived(events.length > 0 && currentIndex >= events.length);
+  // ---------- Routing state ----------
+  const confParam = $derived($page.url.searchParams.get('conf') ?? '');
+  const eventIndexParam = $derived($page.url.searchParams.get('i'));
+  const finishParam = $derived($page.url.searchParams.get('finish') === '1');
 
+  // Resolve current conference object
+  const currentConf = $derived(
+    (data.conferenceList ?? []).find(c => c.name === confParam) ?? null
+  );
+
+  // Resolve current event within conference
+  const currentEvent = $derived(
+    currentConf && eventIndexParam != null
+      ? currentConf.events[Number.parseInt(eventIndexParam, 10)] ?? null
+      : null
+  );
+
+  // Default landing: if no conf in URL, show first conference with unrolled, or finish if all done
+  const defaultLanding = $derived.by(() => {
+    const list = data.conferenceList ?? [];
+    if (list.length === 0) return null;
+    const incomplete = list.find(c => c.rolledCount < c.total);
+    return incomplete ?? list[list.length - 1];
+  });
+
+  const allComplete = $derived(
+    (data.conferenceList ?? []).every(c => c.total === 0 || c.rolledCount >= c.total)
+      && (data.conferenceList ?? []).length > 0
+  );
+
+  // ---------- Roll state ----------
   let rollState = $state('idle');
   let rollWinner = $state(null);
   let rollOutcome = $state(null);
   let rollCameLate = $state(false);
   let rollError = $state('');
 
+  // Reset roll state on event change
   $effect(() => {
-    void currentIndex;
+    void confParam; void eventIndexParam;
     rollState = 'idle';
     rollWinner = null;
     rollOutcome = null;
@@ -88,7 +113,7 @@
       const res = await fetch('/theprogram/show/result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventIndex: currentIndex })
+        body: JSON.stringify({ eventIndex: currentEvent.globalIndex })
       });
       if (!res.ok) throw new Error(await res.text());
       serverResult = await res.json();
@@ -108,12 +133,83 @@
     rollState = 'revealed';
   }
 
-  function nextEvent() {
-    const next = currentIndex < events.length - 1 ? currentIndex + 1 : events.length;
-    goto(`/theprogram/show?event=${next}`, { invalidateAll: true });
+  // Looping "next recruit" — cycles through unrolled events in the current conference.
+  // Treats the just-rolled current event as rolled.
+  function nextUnrolledInConf() {
+    if (!currentConf || !currentEvent) return null;
+    const evs = currentConf.events;
+    const n = evs.length;
+    const cur = currentEvent.confIndex;
+    for (let step = 1; step <= n; step++) {
+      const idx = (cur + step) % n;
+      const ev = evs[idx];
+      const rolled = ev.savedResult || idx === cur; // current is just-rolled
+      if (!rolled) return idx;
+    }
+    return null;
+  }
+
+  function goToNextRecruit() {
+    const next = nextUnrolledInConf();
+    if (next != null) {
+      goto(`/theprogram/show?conf=${encodeURIComponent(currentConf.name)}&i=${next}`, { invalidateAll: true });
+    } else {
+      // Conference done — go back to launcher (it will show "complete")
+      goto(`/theprogram/show?conf=${encodeURIComponent(currentConf.name)}`, { invalidateAll: true });
+    }
+  }
+
+  function returnToList() {
+    if (!currentConf) return;
+    goto(`/theprogram/show?conf=${encodeURIComponent(currentConf.name)}`, { invalidateAll: true });
+  }
+
+  function goToConference(name) {
+    goto(`/theprogram/show?conf=${encodeURIComponent(name)}`, { invalidateAll: true });
+  }
+
+  function goToEvent(i) {
+    goto(`/theprogram/show?conf=${encodeURIComponent(currentConf.name)}&i=${i}`, { invalidateAll: true });
+  }
+
+  function goToFinish() {
+    goto(`/theprogram/show?finish=1`, { invalidateAll: true });
+  }
+
+  // Type chip color helper
+  function chipClass(kind) {
+    return `tp-stamp ${kind === 'steal' ? 'tp-stamp-oxblood' : kind === 'auto' ? '' : 'tp-stamp-gold'}`;
   }
 
   const previouslyRolled = $derived(currentEvent?.savedResult ?? null);
+
+  // ---------- Auto-redirect if URL is missing required params ----------
+  $effect(() => {
+    if (!data.hasOrder) return;
+    if (finishParam) return;
+    // No conf param at all — land on the default
+    if (!confParam && defaultLanding) {
+      const target = allComplete
+        ? `/theprogram/show?finish=1`
+        : `/theprogram/show?conf=${encodeURIComponent(defaultLanding.name)}`;
+      goto(target, { replaceState: true, invalidateAll: false });
+    }
+  });
+
+  // Resolve next conference (for "Next conference" button on launcher when complete)
+  const nextConference = $derived.by(() => {
+    if (!currentConf) return null;
+    const list = data.conferenceList ?? [];
+    const idx = list.findIndex(c => c.name === currentConf.name);
+    if (idx === -1 || idx >= list.length - 1) return null;
+    return list[idx + 1];
+  });
+
+  const isLastConference = $derived.by(() => {
+    if (!currentConf) return false;
+    const list = data.conferenceList ?? [];
+    return list[list.length - 1]?.name === currentConf.name;
+  });
 </script>
 
 <svelte:head><title>The Show · Week {data.weekNumber}</title></svelte:head>
@@ -158,7 +254,7 @@
       </button>
     </div>
   </div>
-{:else if events.length === 0}
+{:else if (data.conferenceList ?? []).length === 0}
   <div class="stage">
     <div class="stage-card">
       <h1 class="stage-title">No Events to Show</h1>
@@ -166,7 +262,7 @@
       <a href="/theprogram/commish" class="tp-pill tp-pill-navy">Back to Commish</a>
     </div>
   </div>
-{:else if isFinished}
+{:else if finishParam || allComplete && !confParam}
   <!-- ============================ Finish ============================ -->
   <div class="stage">
     <div class="stage-card">
@@ -177,7 +273,7 @@
       <div class="stage-eyebrow">Curtain</div>
       <h1 class="stage-title">Show Complete</h1>
       <div class="stage-stamp"><span class="tp-stamp tp-stamp-gold">Week {data.weekNumber}</span></div>
-      <p class="stage-sub">{events.length} event{events.length === 1 ? '' : 's'} rolled.</p>
+      <p class="stage-sub">{data.events.length} event{data.events.length === 1 ? '' : 's'} across {data.conferenceList.length} conferences.</p>
       <div class="tp-divider"><span class="tp-divider-ornament">★ ✦ ★</span></div>
       <div class="finish-actions">
         <a href="/theprogram/show/export" class="tp-pill tp-pill-gold tp-pill-big">Download Results CSV</a>
@@ -190,11 +286,19 @@
   <div class="theater">
     <div class="theater-stripes" aria-hidden="true"></div>
 
+    <div class="event-topbar">
+      <button class="tp-pill tp-pill-small" onclick={returnToList}>← Return to List</button>
+      <div class="event-breadcrumb">
+        <span class="tp-stamp">{currentConf.name}</span>
+        <span class="event-sep">•</span>
+        <span class="event-prog">{currentEvent.confIndex + 1} / {currentConf.total}</span>
+      </div>
+      <div></div>
+    </div>
+
     <header class="event-head">
       <div class="event-chips">
-        <span class="tp-stamp">{currentEvent.conference}</span>
-        <span class="tp-stamp tp-stamp-gold">{currentEvent.type}</span>
-        <span class="event-prog">{currentIndex + 1} <span class="of">of</span> {events.length}</span>
+        <span class={chipClass(currentEvent.kind)}>{currentEvent.type}</span>
       </div>
       <h1 class="event-player">{currentEvent.player}</h1>
     </header>
@@ -210,7 +314,7 @@
           <div class="school-card" class:ineligible={s.eligible === false}>
             <div class="helmet-frame">
               {#if s.helmet}
-                <img src={s.helmet} alt={s.school} class="helmet" />
+                <img src={s.helmet} alt={s.school} class="helmet" referrerpolicy="no-referrer" />
               {:else}
                 <div class="helmet helmet-placeholder">{s.school[0] ?? '?'}</div>
               {/if}
@@ -235,7 +339,7 @@
     {#if rollState === 'spinning'}
       <div class="spinner-stage">
         {#if data.placeholderHelmet}
-          <img src={data.placeholderHelmet} alt="Rolling…" class="spinner-img" />
+          <img src={data.placeholderHelmet} alt="Rolling…" class="spinner-img" referrerpolicy="no-referrer" />
         {:else}
           <div class="spinner-img spinner-fallback">?</div>
         {/if}
@@ -248,7 +352,7 @@
       {#if rollOutcome === 'steal_failed_locked'}
         <div class="reveal-stage locked">
           {#if data.lockedImage}
-            <img src={data.lockedImage} alt="Locked" class="locked-img" />
+            <img src={data.lockedImage} alt="Locked" class="locked-img" referrerpolicy="no-referrer" />
           {/if}
           <div class="locked-headline">Steal Failed — Locked</div>
         </div>
@@ -261,7 +365,7 @@
           <div class="winner-card-wrap">
             <div class="winner-card">
               {#if winnerHelmet}
-                <img src={winnerHelmet} alt={rollWinner} class="winner-img" />
+                <img src={winnerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
               {:else}
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
@@ -284,25 +388,110 @@
           Already rolled · saved result
           <b>{previouslyRolled === 'LOCKED' ? 'Locked' : previouslyRolled}</b>
         </div>
-        <button class="tp-pill tp-pill-gold" onclick={nextEvent}>
-          {isLastEvent ? 'Finish →' : 'Next Event →'}
-        </button>
+        <div class="control-row">
+          <button class="tp-pill" onclick={returnToList}>← Return to List</button>
+          <button class="tp-pill tp-pill-gold" onclick={goToNextRecruit}>Next Recruit →</button>
+        </div>
       {:else if rollState === 'idle'}
         <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={performRoll}>
           {currentEvent.kind === 'auto' && currentEvent.display.solo ? 'Reveal' : 'Roll'}
         </button>
       {:else if rollState === 'revealed'}
-        <button class="tp-pill tp-pill-gold" onclick={nextEvent}>
-          {isLastEvent ? 'Finish →' : 'Next Event →'}
+        <div class="control-row">
+          <button class="tp-pill" onclick={returnToList}>← Return to List</button>
+          <button class="tp-pill tp-pill-gold" onclick={goToNextRecruit}>Next Recruit →</button>
+        </div>
+      {/if}
+    </div>
+  </div>
+{:else if currentConf}
+  <!-- ============================ Conference Launcher ============================ -->
+  <div class="launcher">
+    <div class="theater-stripes" aria-hidden="true"></div>
+
+    <header class="launcher-head">
+      <div class="launcher-eyebrow">Now Entering</div>
+      <h1 class="launcher-title">Conference {currentConf.name}</h1>
+      <div class="launcher-meta">
+        <span class="tp-stamp tp-stamp-gold">Week {data.weekNumber}</span>
+        <span class="launcher-count">{currentConf.rolledCount} / {currentConf.total} rolled</span>
+      </div>
+      <p class="launcher-sub">Pick any recruit to begin. The order will loop until every recruit is rolled.</p>
+    </header>
+
+    <div class="recruits-grid">
+      {#each currentConf.events as ev}
+        <button
+          type="button"
+          class="recruit-card"
+          class:done={!!ev.savedResult}
+          onclick={() => goToEvent(ev.confIndex)}
+        >
+          <div class="recruit-card-top">
+            <span class="recruit-num">{ev.confIndex + 1}</span>
+            <span class={chipClass(ev.kind)}>{ev.type}</span>
+          </div>
+          <div class="recruit-player">{ev.player}</div>
+          {#if ev.savedResult}
+            <div class="recruit-status">
+              <span class="check">✓</span>
+              {ev.savedResult === 'LOCKED' ? 'Locked' : ev.savedResult}
+            </div>
+          {:else}
+            <div class="recruit-status pending">Ready to roll</div>
+          {/if}
+        </button>
+      {/each}
+    </div>
+
+    <div class="launcher-controls">
+      {#if currentConf.rolledCount >= currentConf.total && currentConf.total > 0}
+        {#if isLastConference}
+          <button class="tp-pill tp-pill-gold tp-pill-big" onclick={goToFinish}>Finish the Show →</button>
+        {:else if nextConference}
+          <button class="tp-pill tp-pill-gold tp-pill-big" onclick={() => goToConference(nextConference.name)}>
+            Next: Conference {nextConference.name} →
+          </button>
+        {/if}
+      {:else}
+        <button
+          class="tp-pill tp-pill-gold tp-pill-big"
+          onclick={() => {
+            const next = currentConf.events.findIndex(e => !e.savedResult);
+            if (next !== -1) goToEvent(next);
+          }}
+        >
+          Start from first unrolled →
         </button>
       {/if}
+
+      <div class="launcher-jump">
+        {#each data.conferenceList as c}
+          <button
+            type="button"
+            class="jump-pill"
+            class:active={c.name === currentConf.name}
+            onclick={() => goToConference(c.name)}
+          >
+            {c.name}
+            <span class="jump-prog">{c.rolledCount}/{c.total}</span>
+          </button>
+        {/each}
+        <button class="jump-pill" onclick={goToFinish}>Finish</button>
+      </div>
+    </div>
+  </div>
+{:else}
+  <div class="stage">
+    <div class="stage-card">
+      <h1 class="stage-title">Loading…</h1>
     </div>
   </div>
 {/if}
 
 <style>
   /* ============================================================
-     Stage card — used for order / finish screens
+     Stage card — order / finish screens
      ============================================================ */
   .stage {
     min-height: calc(100vh - 80px);
@@ -389,6 +578,183 @@
   .finish-actions { display: flex; flex-direction: column; gap: 12px; align-items: center; }
 
   /* ============================================================
+     Launcher (per-conference recruit list)
+     ============================================================ */
+  .launcher {
+    min-height: calc(100vh - 80px);
+    background:
+      radial-gradient(ellipse at top, var(--tp-navy-2) 0%, var(--tp-navy) 55%, var(--tp-navy-dark) 100%);
+    color: var(--tp-cream);
+    padding: 40px 32px 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .launcher-head {
+    position: relative;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .launcher-eyebrow {
+    font-family: var(--tp-display);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--tp-gold-soft);
+    margin-bottom: 10px;
+  }
+  .launcher-title {
+    color: var(--tp-cream);
+    font-family: var(--tp-display);
+    font-size: clamp(48px, 7vw, 84px);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+    margin: 0 0 18px;
+    text-shadow:
+      0 2px 0 var(--tp-navy-dark),
+      0 4px 24px rgba(0, 0, 0, 0.4);
+  }
+  .launcher-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .launcher-count {
+    font-family: var(--tp-display);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-gold-soft);
+  }
+  .launcher-sub {
+    color: rgba(244, 236, 221, 0.75);
+    font-style: italic;
+    margin: 0;
+  }
+
+  .recruits-grid {
+    position: relative;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .recruit-card {
+    text-align: left;
+    background: var(--tp-cream);
+    color: var(--tp-navy);
+    border: 1.5px solid var(--tp-navy-dark);
+    border-radius: 4px;
+    padding: 14px 16px 16px;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    font-family: var(--tp-body);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+  }
+  .recruit-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3), 0 0 0 2px var(--tp-gold);
+  }
+  .recruit-card.done {
+    background: rgba(244, 236, 221, 0.65);
+  }
+  .recruit-card.done:hover {
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3), 0 0 0 2px var(--tp-gold-soft);
+  }
+  .recruit-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .recruit-num {
+    font-family: var(--tp-display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.16em;
+    color: var(--tp-muted);
+  }
+  .recruit-player {
+    font-family: var(--tp-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.05;
+    margin-bottom: 10px;
+    color: var(--tp-navy);
+  }
+  .recruit-status {
+    font-family: var(--tp-display);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--tp-gold-2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .recruit-status.pending {
+    color: var(--tp-muted);
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-family: var(--tp-body);
+    font-size: 13px;
+  }
+  .recruit-status .check {
+    color: var(--tp-gold);
+    font-size: 14px;
+  }
+
+  .launcher-controls {
+    position: relative;
+    max-width: 1200px;
+    margin: 36px auto 0;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    align-items: center;
+  }
+  .launcher-jump {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .jump-pill {
+    padding: 8px 14px;
+    background: rgba(244, 236, 221, 0.08);
+    border: 1px solid rgba(244, 236, 221, 0.25);
+    border-radius: 999px;
+    color: var(--tp-cream);
+    font-family: var(--tp-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .jump-pill:hover { background: rgba(244, 236, 221, 0.16); }
+  .jump-pill.active {
+    background: var(--tp-gold);
+    color: var(--tp-navy);
+    border-color: var(--tp-gold-2);
+  }
+  .jump-prog {
+    font-size: 11px;
+    opacity: 0.7;
+  }
+
+  /* ============================================================
      Theater — event display
      ============================================================ */
   .theater {
@@ -396,7 +762,7 @@
     background:
       radial-gradient(ellipse at top, var(--tp-navy-2) 0%, var(--tp-navy) 55%, var(--tp-navy-dark) 100%);
     color: var(--tp-cream);
-    padding: 48px 32px 64px;
+    padding: 28px 32px 56px;
     position: relative;
     overflow: hidden;
   }
@@ -414,28 +780,55 @@
     pointer-events: none;
   }
 
-  .event-head {
+  .event-topbar {
     position: relative;
-    text-align: center;
-    margin-bottom: 36px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    margin-bottom: 20px;
+    gap: 12px;
   }
-  .event-chips {
+  .event-topbar > :first-child { justify-self: start; }
+  .event-topbar > :last-child { justify-self: end; }
+  .event-breadcrumb {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 18px;
-  }
-  .event-prog {
+    color: var(--tp-cream);
     font-family: var(--tp-display);
+  }
+  .event-sep { color: rgba(244, 236, 221, 0.4); }
+  .event-prog {
     font-weight: 700;
     font-size: 13px;
     letter-spacing: 0.2em;
     color: var(--tp-gold-soft);
     text-transform: uppercase;
-    padding-left: 4px;
   }
-  .event-prog .of { color: rgba(244, 236, 221, 0.5); padding: 0 4px; }
+  .event-topbar :global(.tp-pill) {
+    background: rgba(244, 236, 221, 0.1);
+    color: var(--tp-cream);
+    border-color: rgba(244, 236, 221, 0.3);
+  }
+  .event-topbar :global(.tp-pill:hover:not(:disabled)) {
+    background: rgba(244, 236, 221, 0.18);
+    box-shadow: none;
+    transform: none;
+  }
 
+  .event-head {
+    position: relative;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .event-chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  /* HIGH-CONTRAST cream player name on navy backdrop */
   .event-player {
     color: var(--tp-cream);
     font-family: var(--tp-display);
@@ -445,10 +838,12 @@
     text-transform: uppercase;
     line-height: 0.95;
     margin: 0;
-    text-shadow: 0 2px 0 var(--tp-navy-dark);
+    text-shadow:
+      0 0 1px var(--tp-cream),
+      0 2px 0 var(--tp-navy-dark),
+      0 4px 24px rgba(0, 0, 0, 0.55);
   }
 
-  /* School cards — full-color logos on cream cards framed by navy */
   .schools {
     position: relative;
     display: flex;
@@ -465,11 +860,8 @@
     border-radius: 4px;
     padding: 18px 14px 14px;
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
-    transition: transform 0.12s ease;
   }
-  .school-card.ineligible {
-    background: rgba(244, 236, 221, 0.55);
-  }
+  .school-card.ineligible { background: rgba(244, 236, 221, 0.55); }
   .helmet-frame {
     position: relative;
     width: 140px;
@@ -525,16 +917,8 @@
     color: var(--tp-navy);
     letter-spacing: 0.04em;
   }
-  .pct-big {
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--tp-navy);
-  }
-  .pct-big small {
-    font-size: 14px;
-    color: var(--tp-muted);
-    margin-left: 2px;
-  }
+  .pct-big { font-size: 28px; font-weight: 700; color: var(--tp-navy); }
+  .pct-big small { font-size: 14px; color: var(--tp-muted); margin-left: 2px; }
   .pct-bad {
     color: var(--tp-oxblood);
     font-size: 13px;
@@ -543,12 +927,7 @@
     font-weight: 600;
   }
 
-  /* Spinner */
-  .spinner-stage {
-    position: relative;
-    text-align: center;
-    margin: 56px 0;
-  }
+  .spinner-stage { position: relative; text-align: center; margin: 56px 0; }
   .spinner-img {
     width: 260px;
     height: 260px;
@@ -563,10 +942,7 @@
     color: var(--tp-navy);
     font-size: 100px;
   }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .spinner-label {
     margin-top: 18px;
     font-family: var(--tp-display);
@@ -577,7 +953,6 @@
     color: var(--tp-gold);
   }
 
-  /* Reveal — winning helmet on cream card with gold ring */
   .reveal-stage {
     position: relative;
     text-align: center;
@@ -588,11 +963,7 @@
     from { opacity: 0; transform: scale(0.92); }
     to { opacity: 1; transform: scale(1); }
   }
-  .winner-card-wrap {
-    position: relative;
-    display: inline-block;
-    margin-bottom: 18px;
-  }
+  .winner-card-wrap { position: relative; display: inline-block; margin-bottom: 18px; }
   .winner-card {
     position: relative;
     width: 280px;
@@ -606,11 +977,7 @@
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
     transform: scale(1.02);
   }
-  .winner-img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
+  .winner-img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .winner-ring {
     position: absolute;
     inset: -14px;
@@ -621,7 +988,7 @@
   }
   @keyframes ring-pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(200, 162, 74, 0.4); }
-    50%      { box-shadow: 0 0 0 12px rgba(200, 162, 74, 0); }
+    50% { box-shadow: 0 0 0 12px rgba(200, 162, 74, 0); }
   }
   .winner-name {
     font-family: var(--tp-display);
@@ -641,7 +1008,6 @@
     letter-spacing: 0.01em;
   }
 
-  /* Locked steal — oxblood full-bleed center */
   .reveal-stage.locked .locked-img {
     width: 280px;
     height: 280px;
@@ -663,14 +1029,28 @@
     text-shadow: 0 2px 0 var(--tp-navy-dark);
   }
 
-  /* Controls */
   .controls {
     position: relative;
     text-align: center;
     margin-top: 32px;
   }
+  .control-row {
+    display: inline-flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .control-row :global(.tp-pill:not(.tp-pill-gold)) {
+    background: rgba(244, 236, 221, 0.12);
+    color: var(--tp-cream);
+    border-color: rgba(244, 236, 221, 0.4);
+  }
+  .control-row :global(.tp-pill:not(.tp-pill-gold):hover:not(:disabled)) {
+    background: rgba(244, 236, 221, 0.2);
+    box-shadow: none;
+  }
   .prev-note {
-    color: rgba(244, 236, 221, 0.7);
+    color: rgba(244, 236, 221, 0.75);
     font-style: italic;
     margin-bottom: 14px;
     font-size: 14px;

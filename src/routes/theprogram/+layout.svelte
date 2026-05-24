@@ -83,10 +83,10 @@
 
   .tp-app :global(*) { box-sizing: border-box; }
 
-  /* Headings + display caps */
-  .tp-app :global(h1),
-  .tp-app :global(h2),
-  .tp-app :global(h3) {
+  /* Headings + display caps.
+     :where() keeps specificity at 0 so per-page color overrides win
+     (e.g. cream player names on the Oxford backdrop of The Show). */
+  .tp-app :global(:where(h1, h2, h3)) {
     font-family: var(--tp-display);
     color: var(--tp-navy);
     letter-spacing: 0.02em;

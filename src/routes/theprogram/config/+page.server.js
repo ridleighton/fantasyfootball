@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { createClient } from '$lib/server/db.js';
 
-const PHOTO_TYPES = ['School Helmet', 'Placeholder Helmet', 'Locked Image'];
+const PHOTO_TYPES = ['School Helmet', 'Placeholder Helmet', 'Locked Image', 'Bars'];
 
 function nullable(v) {
   if (v == null) return null;

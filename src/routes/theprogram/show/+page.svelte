@@ -357,7 +357,9 @@
           <div class="locked-headline">Steal Failed — Locked</div>
         </div>
       {:else if rollWinner}
-        {@const winnerHelmet = currentEvent.display.schools.find(s => s.school === rollWinner)?.helmet}
+        {@const winnerSchool = currentEvent.display.schools.find(s => s.school === rollWinner)}
+        {@const winnerHelmet = winnerSchool?.helmet}
+        {@const winnerPct = winnerSchool?.normalized}
         <div class="reveal-stage">
           {#if rollCameLate}
             <div class="quip">Bruh… now you're interested?</div>
@@ -372,7 +374,12 @@
             </div>
             <div class="winner-ring" aria-hidden="true"></div>
           </div>
-          <div class="winner-name">{rollWinner}</div>
+          <div class="winner-name">
+            {rollWinner}
+            {#if currentEvent.kind === 'commit' && winnerPct != null}
+              <span class="winner-pct">{winnerPct.toFixed(1)}%</span>
+            {/if}
+          </div>
         </div>
       {:else}
         <div class="reveal-stage">
@@ -997,6 +1004,19 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--tp-cream);
+    text-shadow: 0 2px 0 var(--tp-navy-dark);
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .winner-pct {
+    font-family: var(--tp-display);
+    font-size: 0.6em;
+    color: var(--tp-gold);
+    letter-spacing: 0.06em;
+    font-weight: 700;
     text-shadow: 0 2px 0 var(--tp-navy-dark);
   }
   .quip {

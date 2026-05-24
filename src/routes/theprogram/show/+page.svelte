@@ -1070,14 +1070,21 @@
   .reveal-stage {
     position: relative;
     text-align: center;
-    margin: 32px 0;
+    margin: 32px 0 64px;
     animation: reveal-in 0.4s ease-out;
   }
+  /* Locked steal needs even more breathing room since the slap sits on the
+     locked card directly (no winner-name spacer below). */
+  .reveal-stage.locked .locked-wrap { margin-bottom: 32px; }
   @keyframes reveal-in {
     from { opacity: 0; transform: scale(0.92); }
     to { opacity: 1; transform: scale(1); }
   }
-  .winner-card-wrap { position: relative; display: inline-block; margin-bottom: 18px; }
+  .winner-card-wrap {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 48px; /* room for rotated STOLEN/FAILED slap overhang */
+  }
   .winner-card {
     position: relative;
     width: 280px;
@@ -1209,7 +1216,7 @@
     margin-bottom: 16px;
   }
 
-  .controls { position: relative; text-align: center; margin-top: 32px; }
+  .controls { position: relative; text-align: center; margin-top: 64px; z-index: 10; }
   .control-row {
     display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center;
   }

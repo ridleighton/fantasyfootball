@@ -91,6 +91,49 @@
   let confettiCanvas = $state(null);
   let confettiController = null;
 
+  // JS-driven spinner rotation (so we can smoothly decelerate).
+  let spinnerEl = $state(null);
+  let spinRaf = null;
+  let spinRotation = 0;       // degrees
+  let spinSpeed = 0;          // degrees per millisecond
+  const FAST_SPEED = 360 / 550;  // ~0.65 deg/ms — matches the prior 0.55s spin
+  const SLOW_SPEED = 360 / 3200; // ~0.11 deg/ms — slow drift before explosion
+
+  function startSpinLoop() {
+    if (spinRaf != null) return;
+    let last = performance.now();
+    const tick = (now) => {
+      const dt = now - last;
+      last = now;
+      spinRotation += spinSpeed * dt;
+      if (spinnerEl) spinnerEl.style.transform = `rotate(${spinRotation}deg)`;
+      spinRaf = requestAnimationFrame(tick);
+    };
+    spinRaf = requestAnimationFrame(tick);
+  }
+  function stopSpinLoop() {
+    if (spinRaf != null) {
+      cancelAnimationFrame(spinRaf);
+      spinRaf = null;
+    }
+  }
+  // Animate spinSpeed from its current value to `targetSpeed` over `durationMs`
+  // using ease-out cubic — gradual, not a sudden gear change.
+  function decelerateSpin(targetSpeed, durationMs) {
+    return new Promise((resolve) => {
+      const fromSpeed = spinSpeed;
+      const start = performance.now();
+      const ease = (t) => 1 - Math.pow(1 - t, 3);
+      function tick(now) {
+        const t = Math.min(1, (now - start) / durationMs);
+        spinSpeed = fromSpeed + (targetSpeed - fromSpeed) * ease(t);
+        if (t < 1) requestAnimationFrame(tick);
+        else resolve();
+      }
+      requestAnimationFrame(tick);
+    });
+  }
+
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   $effect(() => {
@@ -103,11 +146,26 @@
     spinPhase = 'fast';
     lockedDropValues = {};
     lockedAnimDone = false;
+    stopSpinLoop();
+    spinRotation = 0;
+    spinSpeed = 0;
     if (confettiController) {
       confettiController.stop();
       confettiController = null;
     }
     closeEditor();
+  });
+
+  // Start the JS spin loop when the spinner mounts in spinning state.
+  $effect(() => {
+    if (rollState === 'spinning' && spinnerEl) {
+      if (spinRaf == null) {
+        spinSpeed = FAST_SPEED;
+        startSpinLoop();
+      }
+    } else if (rollState !== 'spinning') {
+      stopSpinLoop();
+    }
   });
 
   // Size the confetti canvas to viewport, kept in sync on resize.
@@ -188,15 +246,20 @@
       return;
     }
 
-    // ---- Long-shot commit flow: fast spin → slow + glow → explode → reveal ----
-    const FAST_MS = 3000;
-    const SLOW_MS = 1800;
-    const EXPLODE_MS = 2400;
+    // ---- Long-shot commit flow ----
+    // 1. Spin at full speed for 4s.
+    // 2. Gradually decelerate over 3.5s with a pulsing team-colored glow.
+    // 3. Explode confetti for ~5.5s.
+    // 4. Reveal.
+    const FAST_MS = 4000;
+    const SLOW_MS = 3500;
+    const EXPLODE_MS = 5500;
 
     const fastRemaining = Math.max(0, FAST_MS - (Date.now() - startedAt));
     if (fastRemaining > 0) await wait(fastRemaining);
 
-    // Switch to slow + pulse, painted with the winner's team colors.
+    // Switch to slow phase: pulse the helmet with the winner's team colors
+    // and begin gradual JS-driven deceleration.
     glowPrimary = winnerSchool?.colors?.primary ?? '#D9A441';
     glowSecondary = winnerSchool?.colors?.secondary ?? '#B8252C';
     spinPhase = 'slow';
@@ -206,18 +269,20 @@
       ? preloadHelmetCanvas(winnerSchool.helmet)
       : Promise.resolve(null);
 
-    await wait(SLOW_MS);
+    // Eased deceleration: speed cubic-eases from FAST_SPEED → SLOW_SPEED over SLOW_MS.
+    await decelerateSpin(SLOW_SPEED, SLOW_MS);
 
     const helmetCanvas = await helmetPromise;
 
     // Switch to explode state; spawn confetti burst from screen center.
     rollState = 'exploding';
-    await wait(20); // let the canvas mount/size before spawning
+    await wait(20); // let canvas mount/size before spawning
     if (confettiCanvas) {
       confettiController = createConfettiBurst(confettiCanvas, {
         primary: glowPrimary,
         secondary: glowSecondary,
-        helmetCanvas
+        helmetCanvas,
+        count: 480 // doubled for drama
       });
     }
     await wait(EXPLODE_MS);
@@ -607,6 +672,7 @@
       <div class="spinner-stage">
         {#if data.placeholderHelmet}
           <img
+            bind:this={spinnerEl}
             src={data.placeholderHelmet}
             alt="Rolling…"
             class="spinner-img"
@@ -616,7 +682,7 @@
             referrerpolicy="no-referrer"
           />
         {:else}
-          <div class="spinner-img spinner-fallback">?</div>
+          <div class="spinner-img spinner-fallback rotating">?</div>
         {/if}
         <div class="spinner-label">{spinPhase === 'slow' ? 'Settling…' : 'Rolling…'}</div>
       </div>
@@ -1315,14 +1381,16 @@
   .spinner-stage { position: relative; text-align: center; margin: 56px 0; }
   .spinner-img {
     width: 260px; height: 260px; object-fit: contain;
+    /* Rotation is JS-driven via inline `transform` so it can decelerate
+       smoothly across the slow phase. The pulse below is layered separately. */
+  }
+  /* Fallback (no placeholder helmet uploaded) uses CSS-only rotation. */
+  .spinner-img.rotating {
     animation: spin 0.55s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-  /* Long-shot slow phase: slower rotation + pulsing colored drop-shadow tied
-     to the winning team's primary/secondary colors. */
+  /* Slow phase: pulsing team-colored drop-shadow. JS handles rotation speed. */
   .spinner-img.spinning-slow {
-    animation:
-      spin 1.8s linear infinite,
-      spinner-pulse 1.4s ease-in-out infinite;
+    animation: spinner-pulse 1.4s ease-in-out infinite;
   }
   @keyframes spinner-pulse {
     0%, 100% {

@@ -50,7 +50,8 @@ export function createConfettiBurst(canvas, opts = {}) {
   const particles = Array.from({ length: count }, () => {
     const angle = Math.random() * Math.PI * 2;
     const speed = 3 + Math.random() * 16;
-    const isHelmet = !!helmetCanvas && Math.random() > 0.55;
+    // 40% helmet particles (random > 0.60 → 40% probability).
+    const isHelmet = !!helmetCanvas && Math.random() > 0.6;
     const size = isHelmet ? 24 + Math.random() * 40 : 5 + Math.random() * 13;
     return {
       x: originX,
@@ -64,7 +65,9 @@ export function createConfettiBurst(canvas, opts = {}) {
       color: Math.random() > 0.45 ? primary : secondary,
       glow: Math.random() > 0.5,
       alpha: 1,
-      decay: (isHelmet ? 0.005 : 0.007) + Math.random() * 0.008,
+      // Decay halved so the burst lingers for several seconds.
+      // Helmets ~3–8s, strips/dots ~2.5–5s.
+      decay: (isHelmet ? 0.002 : 0.0028) + Math.random() * 0.0035,
       shape: isHelmet ? 'helmet' : (Math.random() > 0.4 ? 'rect' : 'circle')
     };
   });

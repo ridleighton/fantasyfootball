@@ -1076,8 +1076,9 @@
   }
   .player-stamp-stolen {
     font-size: clamp(36px, 5vw, 76px);
-    /* Lands ~1s after the stealer card finishes settling (slam delay 1.2s + slam 0.55s + dramatic pause) */
-    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 2.2s both;
+    /* Lands ~0.4s after the stealer card finishes settling
+       (3s hold + 0.55s slam + 0.4s pause). */
+    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 4s both;
   }
   .player-stamp-stayed {
     font-size: clamp(28px, 4vw, 56px);
@@ -1438,8 +1439,8 @@
   }
   .stolen-stack .stealer-slam {
     z-index: 4;
-    /* Held for 1.2s while the committed card sits alone for drama, then slams. */
-    animation: stealer-slam 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 1.2s both;
+    /* Committed school sits alone for a full 3s, then the stealer slams. */
+    animation: stealer-slam 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 3s both;
   }
   @keyframes stealer-slam {
     0%   { transform: translateY(-180vh) scale(1.6) rotate(-12deg); opacity: 0; }

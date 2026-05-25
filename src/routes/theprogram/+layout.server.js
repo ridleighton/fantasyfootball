@@ -14,10 +14,21 @@ export async function load({ parent, url }) {
     throw error(403, 'Access denied — The Program is for commissioners and admins only.');
   }
 
-  // Look up the brand logo for the nav
+  // Look up the brand logo for the nav. Also ensures the newer columns on
+  // program_photos exist — runs once per request and is a no-op if they're
+  // already there. Without this safety net, hitting /theprogram/show on a
+  // DB that hasn't had the image_url / primary_color / secondary_color
+  // migration applied throws "column does not exist".
   let logoUrl = null;
   const db = await createClient();
   try {
+    await db.query(`
+      ALTER TABLE program_photos
+        ADD COLUMN IF NOT EXISTS image_url TEXT,
+        ADD COLUMN IF NOT EXISTS primary_color VARCHAR(7),
+        ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(7)
+    `).catch(() => {});
+
     const res = await db.query(
       `SELECT image_url, google_file_id FROM program_photos
         WHERE type = 'Logo' ORDER BY id ASC LIMIT 1`

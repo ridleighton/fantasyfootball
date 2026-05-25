@@ -152,31 +152,52 @@ export function computeCommit(group) {
 
 // Steal: equal weights across each row's school AND the committed school
 // (if it's not already in the list). Locked is detected from any row.
+// Committed school is always sorted first; remaining schools alphabetical.
+// Each school carries `inOriginalRoll` from its row so we can tag late-joiners.
 export function computeSteal(group) {
   const isLocked = group.rows.some(r => r.locked === true);
   const committedSchool = group.rows.find(r => (r.committed_school ?? '').trim())?.committed_school?.trim() ?? null;
+
+  const inOriginalByLower = new Map();
+  for (const r of group.rows) {
+    const sch = (r.school ?? '').trim();
+    if (!sch) continue;
+    const key = sch.toLowerCase();
+    if (!inOriginalByLower.has(key)) {
+      inOriginalByLower.set(key, r.in_original_roll);
+    }
+  }
 
   const schoolsSet = new Set();
   for (const r of group.rows) {
     const sch = (r.school ?? '').trim();
     if (sch) schoolsSet.add(sch);
   }
-  // Include the committed school as a candidate to "stay" — required for the
-  // failed-steal outcome to be a roll outcome rather than impossible.
   if (committedSchool) schoolsSet.add(committedSchool);
 
   const schools = [...schoolsSet];
   const pct = schools.length > 0 ? 100 / schools.length : 0;
+  const committedLower = committedSchool ? committedSchool.toLowerCase() : null;
+
+  const decorated = schools.map(s => ({
+    school: s,
+    normalized: pct,
+    eligible: true,
+    raw: pct,
+    isCommitted: committedLower && s.toLowerCase() === committedLower,
+    inOriginalRoll: inOriginalByLower.get(s.toLowerCase()) ?? null
+  }));
+
+  decorated.sort((a, b) => {
+    if (a.isCommitted) return -1;
+    if (b.isCommitted) return 1;
+    return a.school.localeCompare(b.school, undefined, { sensitivity: 'base' });
+  });
+
   return {
     locked: isLocked,
     committedSchool,
-    schools: schools.map(s => ({
-      school: s,
-      normalized: pct,
-      eligible: true,
-      raw: pct,
-      isCommitted: committedSchool && s.toLowerCase() === committedSchool.toLowerCase()
-    }))
+    schools: decorated
   };
 }
 

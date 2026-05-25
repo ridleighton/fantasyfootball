@@ -86,6 +86,8 @@
     rollOutcome = null;
     rollCameLate = false;
     rollError = '';
+    lockedDropValues = {};
+    lockedAnimDone = false;
     closeEditor();
   });
 
@@ -222,6 +224,42 @@
     return currentEvent?.kind === 'steal'
       && (rollOutcome === 'steal_failed_stayed');
   }
+  function isLockedReveal() {
+    return currentEvent?.kind === 'steal'
+      && rollState === 'revealed'
+      && rollOutcome === 'steal_failed_locked';
+  }
+
+  // ---------- Locked-reveal odds drop animation ----------
+  let lockedDropValues = $state({});
+  let lockedAnimDone = $state(false);
+
+  function startLockedAnimation() {
+    if (!currentEvent?.display?.schools) return;
+    const startValues = {};
+    for (const s of currentEvent.display.schools) {
+      if (!s.isCommitted) startValues[s.school] = Number(s.normalized ?? 0);
+    }
+    lockedDropValues = { ...startValues };
+    lockedAnimDone = false;
+
+    const start = performance.now();
+    const duration = 1400;
+    function step(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = {};
+      for (const k in startValues) next[k] = startValues[k] * (1 - eased);
+      lockedDropValues = next;
+      if (t < 1) requestAnimationFrame(step);
+      else lockedAnimDone = true;
+    }
+    requestAnimationFrame(step);
+  }
+
+  $effect(() => {
+    if (isLockedReveal()) startLockedAnimation();
+  });
 
   // ---------- Edit panel ----------
   let editOpen = $state(false);
@@ -275,6 +313,10 @@
       }
     }
     editSaving = true;
+    // Capture URL params BEFORE invalidateAll triggers a re-render so we can
+    // navigate back to the same event after data refreshes.
+    const restoreConf = currentConf?.name;
+    const restoreIdx = currentEvent?.confIndex;
     try {
       const res = await fetch('/theprogram/show/edit-event', {
         method: 'POST',
@@ -283,6 +325,15 @@
       });
       if (!res.ok) throw new Error(await res.text() || 'Save failed');
       await invalidateAll();
+      // Defensive: re-assert the URL so we stay on the same event after
+      // the data shape shifts. Without this, the page sometimes flashed
+      // back to the launcher because $derived chains briefly went null.
+      if (restoreConf && restoreIdx != null) {
+        await goto(
+          `/theprogram/show?conf=${encodeURIComponent(restoreConf)}&i=${restoreIdx}`,
+          { invalidateAll: false, replaceState: true, noScroll: true }
+        );
+      }
       closeEditor();
     } catch (e) {
       editError = e.message;
@@ -382,24 +433,36 @@
       <div class="event-chips">
         <span class={chipClass(currentEvent.kind)}>{currentEvent.type}</span>
       </div>
-      <h1 class="event-player tp-stamped-cream">{currentEvent.player}</h1>
+      <div class="player-wrap">
+        <h1 class="event-player tp-stamped-cream">{currentEvent.player}</h1>
+        {#if isStealSuccess()}
+          <div class="player-name-stamp player-stamp-stolen" aria-label="Stolen">STOLEN</div>
+        {/if}
+      </div>
     </header>
 
     {#if rollError}
       <div class="tp-alert tp-alert-error event-alert">{rollError}</div>
     {/if}
 
-    <!-- Schools display -->
-    {#if rollState !== 'spinning' && rollState !== 'revealed'}
-      <div class="schools">
+    <!-- Schools display — shown pre-roll AND during locked reveal -->
+    {#if rollState === 'idle' || isLockedReveal()}
+      <div class="schools" class:schools-locked={isLockedReveal()}>
         {#each currentEvent.display.schools as s}
+          {@const showBars = isLockedReveal() && !s.isCommitted && data.barsImage}
+          {@const showLockSlap = isLockedReveal() && s.isCommitted}
+          {@const dropping = isLockedReveal() && !s.isCommitted}
           <div
             class="school-card"
             class:ineligible={s.eligible === false}
             class:committed={currentEvent.kind === 'steal' && s.isCommitted}
+            class:locked-active={isLockedReveal()}
           >
             {#if currentEvent.kind === 'steal' && s.isCommitted}
               <div class="committed-banner">Currently Committed</div>
+            {/if}
+            {#if rollState === 'idle' && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
+              <div class="late-banner">Now You're Interested?</div>
             {/if}
             <div class="helmet-frame">
               {#if s.helmet}
@@ -410,11 +473,19 @@
               {#if s.eligible === false}
                 <div class="x-badge" aria-label="ineligible">×</div>
               {/if}
+              {#if showBars}
+                <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
+              {/if}
+              {#if showLockSlap}
+                <div class="locked-slap-on-card" aria-label="Locked">LOCKED</div>
+              {/if}
             </div>
             <div class="school-name">{s.school}</div>
             <div class="school-pct">
               {#if s.eligible === false}
                 <span class="pct-bad">{(s.raw ?? 0).toFixed(1)}% · below cut</span>
+              {:else if dropping}
+                <span class="pct-big dropping">{(lockedDropValues[s.school] ?? s.normalized ?? 0).toFixed(1)}<small>%</small></span>
               {:else}
                 <span class="pct-big">{(s.normalized ?? 0).toFixed(1)}<small>%</small></span>
               {/if}
@@ -436,28 +507,36 @@
       </div>
     {/if}
 
-    <!-- Reveal -->
-    {#if rollState === 'revealed'}
-      {#if rollOutcome === 'steal_failed_locked'}
-        <div class="reveal-stage locked">
-          <div class="locked-wrap">
-            {#if data.lockedImage}
-              <img src={data.lockedImage} alt="Locked" class="locked-img" referrerpolicy="no-referrer" />
-            {:else if currentEvent.display.committedSchoolHelmet}
-              <img src={currentEvent.display.committedSchoolHelmet} alt={currentEvent.display.committedSchool ?? ''} class="locked-img" referrerpolicy="no-referrer" />
-            {/if}
-            <div class="locked-slap" aria-label="Steal failed">STEAL<br/>FAILED</div>
+    <!-- Reveal: non-locked outcomes (locked uses the schools view above) -->
+    {#if rollState === 'revealed' && !isLockedReveal()}
+      {#if isStealSuccess()}
+        {@const stealerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
+        {@const stealerHelmet = stealerSchool?.helmet}
+        {@const committedSchool = currentEvent.display.schools.find(s => s.isCommitted)}
+        {@const committedHelmet = committedSchool?.helmet ?? currentEvent.display.committedSchoolHelmet}
+        <!-- Stolen reveal: committed card visible, stealer card slams on top -->
+        <div class="reveal-stage steal-success">
+          <div class="stolen-stack">
+            <div class="winner-card committed-base">
+              {#if committedHelmet}
+                <img src={committedHelmet} alt={committedSchool?.school ?? ''} class="winner-img" referrerpolicy="no-referrer" />
+              {/if}
+              <div class="committed-tag">Committed To</div>
+            </div>
+            <div class="winner-card stealer-slam">
+              {#if stealerHelmet}
+                <img src={stealerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
+              {:else}
+                <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
+              {/if}
+            </div>
           </div>
+          <div class="winner-name tp-stamped-cream">{rollWinner}</div>
         </div>
-      {:else if rollWinner}
+      {:else if isStealFailedNotLocked()}
         {@const winnerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
-        {@const winnerHelmet = winnerSchool?.helmet ?? (currentEvent.display.committedSchool?.toLowerCase() === rollWinner?.toLowerCase() ? currentEvent.display.committedSchoolHelmet : null)}
-        {@const winnerPct = winnerSchool?.normalized}
+        {@const winnerHelmet = winnerSchool?.helmet}
         <div class="reveal-stage">
-          {#if rollCameLate}
-            <div class="quip">Bruh… now you're interested?</div>
-          {/if}
-
           <div class="winner-card-wrap">
             <div class="winner-card">
               {#if winnerHelmet}
@@ -465,20 +544,31 @@
               {:else}
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
-              {#if isStealFailedNotLocked() && data.barsImage}
+              {#if data.barsImage}
                 <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
               {/if}
             </div>
             <div class="winner-ring" aria-hidden="true"></div>
-
-            {#if isStealSuccess()}
-              <div class="stolen-slap" aria-label="Stolen">STOLEN</div>
-            {/if}
-            {#if isStealFailedNotLocked()}
-              <div class="failed-slap" aria-label="Steal failed">STEAL<br/>FAILED</div>
-            {/if}
+            <div class="failed-slap" aria-label="Steal failed">STEAL<br/>FAILED</div>
           </div>
-
+          <div class="winner-name tp-stamped-cream">{rollWinner}</div>
+        </div>
+      {:else if rollWinner}
+        {@const winnerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
+        {@const winnerHelmet = winnerSchool?.helmet}
+        {@const winnerPct = winnerSchool?.normalized}
+        <!-- Commit / Auto-Commit winner -->
+        <div class="reveal-stage">
+          <div class="winner-card-wrap">
+            <div class="winner-card">
+              {#if winnerHelmet}
+                <img src={winnerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
+              {:else}
+                <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
+              {/if}
+            </div>
+            <div class="winner-ring" aria-hidden="true"></div>
+          </div>
           <div class="winner-name tp-stamped-cream">
             {rollWinner}
             {#if currentEvent.kind === 'commit' && winnerPct != null}
@@ -947,6 +1037,12 @@
   .event-head { position: relative; text-align: center; margin-bottom: 32px; }
   .event-chips { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 
+  /* Player-name wrapper — host for the STOLEN stamp overlay */
+  .player-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+  }
   .event-player {
     font-family: var(--tp-display);
     font-size: clamp(48px, 8vw, 96px);
@@ -954,6 +1050,53 @@
     text-transform: uppercase;
     line-height: 0.95;
     margin: 0;
+  }
+
+  /* STOLEN stamp on the last third of the player name */
+  .player-name-stamp {
+    position: absolute;
+    top: 50%;
+    left: 66%;
+    transform: translate(-30%, -50%) rotate(-8deg);
+    font-family: var(--tp-display);
+    font-size: clamp(36px, 5vw, 76px);
+    letter-spacing: 0.04em;
+    line-height: 0.9;
+    color: var(--tp-cream);
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 5;
+    text-shadow:
+      -3px -3px 0 var(--tp-navy-dark),
+       3px -3px 0 var(--tp-navy-dark),
+      -3px  3px 0 var(--tp-navy-dark),
+       3px  3px 0 var(--tp-navy-dark),
+      -5px -5px 0 var(--tp-gold),
+       5px -5px 0 var(--tp-gold),
+      -5px  5px 0 var(--tp-gold),
+       5px  5px 0 var(--tp-gold),
+       0 8px 24px rgba(0, 0, 0, 0.6);
+    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 0.6s both;
+  }
+
+  /* "Now you're interested?" pre-roll tag on late-joiner school cards */
+  .late-banner {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-3deg);
+    background: var(--tp-oxblood);
+    color: var(--tp-gold-soft);
+    padding: 4px 10px;
+    font-family: var(--tp-body);
+    font-style: italic;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border-radius: 2px;
+    white-space: nowrap;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+    z-index: 4;
   }
 
   .schools {
@@ -1196,17 +1339,101 @@
     to   { transform: translate(-50%, -50%) rotate(-8deg) scale(1); }
   }
 
-  /* Locked steal layout */
-  .locked-wrap { position: relative; display: inline-block; }
-  .reveal-stage.locked .locked-img {
+  /* Locked steal — schools view augmented with bars + LOCKED slam */
+  .schools-locked .school-card.committed {
+    /* Pulse halo to draw attention to the locked one */
+    animation: locked-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes locked-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3); }
+    50%      { box-shadow: 0 0 0 8px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3); }
+  }
+  .helmet-frame .bars-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    animation: bars-drop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+    z-index: 3;
+  }
+  .locked-slap-on-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-8deg);
+    font-family: var(--tp-display);
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: 0.85;
+    color: var(--tp-cream);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: center;
+    pointer-events: none;
+    z-index: 6;
+    text-shadow:
+      -2px -2px 0 var(--tp-navy-dark),
+       2px -2px 0 var(--tp-navy-dark),
+      -2px  2px 0 var(--tp-navy-dark),
+       2px  2px 0 var(--tp-navy-dark),
+      -4px -4px 0 var(--tp-gold),
+       4px -4px 0 var(--tp-gold),
+      -4px  4px 0 var(--tp-gold),
+       4px  4px 0 var(--tp-gold),
+       0 6px 18px rgba(0, 0, 0, 0.7);
+    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 0.7s both;
+  }
+  .pct-big.dropping {
+    color: var(--tp-oxblood);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Stolen reveal — committed card visible, stealer slams on top */
+  .stolen-stack {
+    position: relative;
+    display: inline-block;
     width: 320px;
     height: 320px;
-    object-fit: contain;
-    background: var(--tp-cream);
-    border: 2px solid var(--tp-oxblood);
-    border-radius: 6px;
-    padding: 16px;
-    box-shadow: 0 0 0 6px rgba(122, 31, 43, 0.25), 0 8px 30px rgba(0, 0, 0, 0.45);
+    margin-bottom: 48px;
+  }
+  .stolen-stack .winner-card {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    transform: none;
+  }
+  .stolen-stack .committed-base {
+    z-index: 1;
+    border-color: var(--tp-gold);
+    box-shadow: 0 0 0 3px var(--tp-gold), 0 8px 30px rgba(0, 0, 0, 0.45);
+  }
+  .committed-tag {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--tp-gold);
+    color: var(--tp-navy-dark);
+    padding: 4px 12px;
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    white-space: nowrap;
+    box-shadow: 0 2px 0 var(--tp-gold-2);
+  }
+  .stolen-stack .stealer-slam {
+    z-index: 4;
+    animation: stealer-slam 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both;
+  }
+  @keyframes stealer-slam {
+    0%   { transform: translateY(-180vh) scale(1.6) rotate(-12deg); opacity: 0; }
+    70%  { transform: translateY(8px) scale(1.04) rotate(2deg); opacity: 1; }
+    100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
   }
   .quip {
     font-family: var(--tp-body);

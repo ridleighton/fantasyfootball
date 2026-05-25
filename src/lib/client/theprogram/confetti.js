@@ -39,6 +39,7 @@ export function createConfettiBurst(canvas, opts = {}) {
   const {
     primary = '#D9A441',
     secondary = '#B8252C',
+    accent = '#F4ECDD',
     helmetCanvas = null,
     count = 240,
     originX = canvas.width / 2,
@@ -46,29 +47,30 @@ export function createConfettiBurst(canvas, opts = {}) {
   } = opts;
 
   const ctx = canvas.getContext('2d');
+  const palette = [primary, secondary, accent];
 
   const particles = Array.from({ length: count }, () => {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 3 + Math.random() * 16;
-    // 40% helmet particles (random > 0.60 → 40% probability).
-    const isHelmet = !!helmetCanvas && Math.random() > 0.6;
-    const size = isHelmet ? 24 + Math.random() * 40 : 5 + Math.random() * 13;
+    const speed = 1.5 + Math.random() * 8;
+    // ~45% helmet particles (random > 0.55 → 45% probability).
+    const isHelmet = !!helmetCanvas && Math.random() > 0.55;
+    const size = isHelmet ? 20 + Math.random() * 36 : 5 + Math.random() * 12;
     return {
       x: originX,
       y: originY,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 7,
+      vy: Math.sin(angle) * speed - 2.5,
       w: size,
-      h: isHelmet ? size : size * 0.6,
+      h: isHelmet ? size : size * 0.55,
       rot: Math.random() * Math.PI * 2,
-      rotV: (Math.random() - 0.5) * (isHelmet ? 0.1 : 0.2),
-      color: Math.random() > 0.45 ? primary : secondary,
+      rotV: (Math.random() - 0.5) * 0.1,
+      color: palette[Math.floor(Math.random() * palette.length)],
       glow: Math.random() > 0.5,
       alpha: 1,
-      // Decay halved so the burst lingers for several seconds.
-      // Helmets ~3–8s, strips/dots ~2.5–5s.
-      decay: (isHelmet ? 0.002 : 0.0028) + Math.random() * 0.0035,
-      shape: isHelmet ? 'helmet' : (Math.random() > 0.4 ? 'rect' : 'circle')
+      decay: 0.004 + Math.random() * 0.005,
+      shape: isHelmet ? 'helmet' : (Math.random() > 0.45 ? 'rect' : 'circle'),
+      gravity: 0.18,
+      drag: 0.99
     };
   });
 
@@ -84,8 +86,8 @@ export function createConfettiBurst(canvas, opts = {}) {
       alive++;
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.38;
-      p.vx *= 0.99;
+      p.vy += p.gravity;
+      p.vx *= p.drag;
       p.rot += p.rotV;
       p.alpha -= p.decay;
 
@@ -95,7 +97,7 @@ export function createConfettiBurst(canvas, opts = {}) {
       ctx.rotate(p.rot);
 
       if (p.glow) {
-        ctx.shadowBlur = p.shape === 'helmet' ? 18 : 10;
+        ctx.shadowBlur = p.shape === 'helmet' ? 20 : 10;
         ctx.shadowColor = p.color;
       }
 

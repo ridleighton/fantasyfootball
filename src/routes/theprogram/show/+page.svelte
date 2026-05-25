@@ -91,22 +91,39 @@
   let confettiCanvas = $state(null);
   let confettiController = null;
 
-  // JS-driven spinner rotation (so we can smoothly decelerate).
+  // JS-driven spinner rotation. Frame-based (degrees per RAF tick) to match
+  // the spec values verbatim: 14 deg/frame during spin_fast, * 0.962 per
+  // frame during spin_slow (floor 0.4).
   let spinnerEl = $state(null);
   let spinRaf = null;
-  let spinRotation = 0;       // degrees
-  let spinSpeed = 0;          // degrees per millisecond
-  const FAST_SPEED = 360 / 550;  // ~0.65 deg/ms — matches the prior 0.55s spin
-  const SLOW_SPEED = 360 / 3200; // ~0.11 deg/ms — slow drift before explosion
+  let spinRotation = 0;       // degrees, accumulates forever
+  let spinSpeed = 0;          // degrees per RAF tick
+  const REGULAR_SPIN_SPEED = 11; // ~660 deg/s, matches the old 0.55s/rev look
+  const UPSET_FAST_SPEED   = 14; // spec
+  const UPSET_SLOW_FLOOR   = 0.4;
+  const UPSET_SLOW_DECAY   = 0.962;
+
+  // Upset (long-shot commit) phase machine. Drives CSS classes on the
+  // spinner image and the darken overlay. 'off' = not in the upset flow.
+  let upsetPhase = $state('off');
+  let darkenOpacity = $state(0);
 
   function startSpinLoop() {
     if (spinRaf != null) return;
-    let last = performance.now();
-    const tick = (now) => {
-      const dt = now - last;
-      last = now;
-      spinRotation += spinSpeed * dt;
-      if (spinnerEl) spinnerEl.style.transform = `rotate(${spinRotation}deg)`;
+    const tick = () => {
+      if (upsetPhase === 'spin_slow') {
+        spinSpeed = Math.max(UPSET_SLOW_FLOOR, spinSpeed * UPSET_SLOW_DECAY);
+      }
+      const rotating =
+        rollState === 'spinning' && (
+          upsetPhase === 'off' ||
+          upsetPhase === 'spin_fast' ||
+          upsetPhase === 'spin_slow'
+        );
+      if (rotating) {
+        spinRotation += spinSpeed;
+        if (spinnerEl) spinnerEl.style.transform = `rotate(${spinRotation}deg)`;
+      }
       spinRaf = requestAnimationFrame(tick);
     };
     spinRaf = requestAnimationFrame(tick);
@@ -116,22 +133,6 @@
       cancelAnimationFrame(spinRaf);
       spinRaf = null;
     }
-  }
-  // Animate spinSpeed from its current value to `targetSpeed` over `durationMs`
-  // using ease-out cubic — gradual, not a sudden gear change.
-  function decelerateSpin(targetSpeed, durationMs) {
-    return new Promise((resolve) => {
-      const fromSpeed = spinSpeed;
-      const start = performance.now();
-      const ease = (t) => 1 - Math.pow(1 - t, 3);
-      function tick(now) {
-        const t = Math.min(1, (now - start) / durationMs);
-        spinSpeed = fromSpeed + (targetSpeed - fromSpeed) * ease(t);
-        if (t < 1) requestAnimationFrame(tick);
-        else resolve();
-      }
-      requestAnimationFrame(tick);
-    });
   }
 
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -172,6 +173,8 @@
     rollCameLate = false;
     rollError = '';
     spinPhase = 'fast';
+    upsetPhase = 'off';
+    darkenOpacity = 0;
     lockedDropValues = {};
     lockedAnimDone = false;
     stopSpinLoop();
@@ -185,15 +188,39 @@
   });
 
   // Start the JS spin loop when the spinner mounts in spinning state.
+  // For the regular (non-upset) path, set a constant speed up front.
+  // The upset flow will overwrite spinSpeed at the right phase boundary.
   $effect(() => {
     if (rollState === 'spinning' && spinnerEl) {
       if (spinRaf == null) {
-        spinSpeed = FAST_SPEED;
+        if (upsetPhase === 'off') spinSpeed = REGULAR_SPIN_SPEED;
         startSpinLoop();
       }
     } else if (rollState !== 'spinning') {
       stopSpinLoop();
     }
+  });
+
+  // Clear the inline rotate() transform at phase boundaries where the
+  // CSS animation needs to drive scale/opacity itself (it would otherwise
+  // be overridden by element.style.transform = `rotate(...)` from the loop).
+  $effect(() => {
+    if (!spinnerEl) return;
+    if (upsetPhase === 'in') {
+      spinnerEl.style.transform = '';
+      spinRotation = 0;
+    } else if (upsetPhase === 'pulse') {
+      spinnerEl.style.transform = '';
+    } else if (
+      upsetPhase === 'explode'
+      || upsetPhase === 'confetti'
+      || upsetPhase === 'cooling'
+    ) {
+      // Let the .upset-explode CSS rule's transform take over.
+      spinnerEl.style.transform = '';
+    }
+    // For 'spin_fast' / 'spin_slow' / 'stop_glow' / 'off' the spin loop
+    // (or the last-tick frozen value) controls the transform.
   });
 
   // Size the confetti canvas to viewport, kept in sync on resize.
@@ -274,47 +301,59 @@
       return;
     }
 
-    // ---- Long-shot commit flow ----
-    // 1. Spin at full speed for 4s.
-    // 2. Gradually decelerate over 3.5s with a pulsing team-colored glow.
-    // 3. Explode confetti for ~5.5s.
-    // 4. Reveal.
-    const FAST_MS = 4000;
-    const SLOW_MS = 3500;
-    const EXPLODE_MS = 5500;
-
-    const fastRemaining = Math.max(0, FAST_MS - (Date.now() - startedAt));
-    if (fastRemaining > 0) await wait(fastRemaining);
-
-    // Switch to slow phase: pulse the helmet with the winner's team colors
-    // and begin gradual JS-driven deceleration.
+    // ---- Long-shot commit / upset flow (per the spec) ----
+    //   in (500ms) → pulse (1800ms) → spin_fast (3500ms) → spin_slow (2000ms)
+    //   → stop_glow (3500ms) → explode (260ms) → confetti (5000ms)
+    //   → cooling (700ms) → reveal
     glowPrimary = winnerSchool?.colors?.primary ?? '#D9A441';
     glowSecondary = winnerSchool?.colors?.secondary ?? '#B8252C';
-    spinPhase = 'slow';
 
-    // Preload the winner helmet (CORS-stripped) while the spinner slows.
+    // Preload the winner helmet (CORS-stripped) in the background — we'll
+    // need it for the confetti burst by the time stop_glow ends.
     const helmetPromise = winnerSchool?.helmet
       ? preloadHelmetCanvas(winnerSchool.helmet)
       : Promise.resolve(null);
 
-    // Eased deceleration: speed cubic-eases from FAST_SPEED → SLOW_SPEED over SLOW_MS.
-    await decelerateSpin(SLOW_SPEED, SLOW_MS);
+    upsetPhase = 'in';
+    await wait(500);
 
+    upsetPhase = 'pulse';
+    await wait(1800);
+
+    upsetPhase = 'spin_fast';
+    spinSpeed = UPSET_FAST_SPEED;
+    await wait(3500);
+
+    upsetPhase = 'spin_slow';
+    // The spin loop will decay spinSpeed *= 0.962 per frame, floor 0.4.
+    await wait(2000);
+
+    upsetPhase = 'stop_glow';
+    spinSpeed = 0; // freeze rotation at its final angle
+    darkenOpacity = 0.62;
+    await wait(3500);
+
+    upsetPhase = 'explode';
     const helmetCanvas = await helmetPromise;
+    await wait(260);
 
-    // Switch to explode state; spawn confetti burst from screen center.
-    rollState = 'exploding';
-    await wait(20); // let canvas mount/size before spawning
+    upsetPhase = 'confetti';
     if (confettiCanvas) {
       confettiController = createConfettiBurst(confettiCanvas, {
         primary: glowPrimary,
         secondary: glowSecondary,
+        accent: '#F4ECDD',
         helmetCanvas,
-        count: 480 // doubled for drama
+        count: 240
       });
     }
-    await wait(EXPLODE_MS);
+    await wait(5000);
 
+    upsetPhase = 'cooling';
+    darkenOpacity = 0;
+    await wait(700);
+
+    upsetPhase = 'off';
     rollWinner = serverResult.winner;
     rollOutcome = serverResult.outcome;
     rollCameLate = !!serverResult.cameLate;
@@ -708,16 +747,23 @@
       </div>
     {/if}
 
-    <!-- Spinner -->
+    <!-- Darken overlay — covers the theater backdrop during stop_glow.
+         Inline opacity is state-driven; the CSS transition handles the fade. -->
+    <div class="darken-overlay" style:opacity={darkenOpacity} aria-hidden="true"></div>
+
+    <!-- Spinner — mounted for both regular spinning and the full upset sequence -->
     {#if rollState === 'spinning'}
-      <div class="spinner-stage">
+      <div class="spinner-stage" data-upset={upsetPhase}>
         {#if data.placeholderHelmet}
           <img
             bind:this={spinnerEl}
             src={data.placeholderHelmet}
             alt="Rolling…"
             class="spinner-img"
-            class:spinning-slow={spinPhase === 'slow'}
+            class:upset-in={upsetPhase === 'in'}
+            class:upset-pulse={upsetPhase === 'pulse'}
+            class:upset-stop-glow={upsetPhase === 'stop_glow'}
+            class:upset-explode={upsetPhase === 'explode' || upsetPhase === 'confetti' || upsetPhase === 'cooling'}
             style:--glow-1={glowPrimary}
             style:--glow-2={glowSecondary}
             referrerpolicy="no-referrer"
@@ -725,13 +771,16 @@
         {:else}
           <div class="spinner-img spinner-fallback rotating">?</div>
         {/if}
-        <div class="spinner-label">{spinPhase === 'slow' ? 'Settling…' : 'Rolling…'}</div>
+        {#if upsetPhase === 'off'}
+          <div class="spinner-label">Rolling…</div>
+        {:else if upsetPhase === 'in' || upsetPhase === 'pulse'}
+          <div class="spinner-label">Something's happening…</div>
+        {:else if upsetPhase === 'spin_fast' || upsetPhase === 'spin_slow'}
+          <div class="spinner-label">Rolling…</div>
+        {:else if upsetPhase === 'stop_glow'}
+          <div class="spinner-label upset-charge-label">Upset Brewing</div>
+        {/if}
       </div>
-    {/if}
-
-    <!-- Exploding state: confetti only (canvas is rendered below the page) -->
-    {#if rollState === 'exploding'}
-      <div class="explosion-stage" aria-hidden="true"></div>
     {/if}
 
     <!-- Reveal: locked + stayed are rendered inside the schools view above.
@@ -950,11 +999,11 @@
   </div>
 {/if}
 
-<!-- Confetti overlay — always mounted, only visible during the exploding state -->
+<!-- Confetti overlay — always mounted, visible during confetti+cooling phases -->
 <canvas
   bind:this={confettiCanvas}
   class="confetti-canvas"
-  class:active={rollState === 'exploding'}
+  class:active={rollState === 'exploding' || upsetPhase === 'confetti' || upsetPhase === 'cooling'}
   aria-hidden="true"
 ></canvas>
 
@@ -1212,6 +1261,7 @@
     align-items: center;
     margin-bottom: 20px;
     gap: 12px;
+    z-index: 4; /* above darken overlay */
   }
   .event-topbar > :first-child { justify-self: start; }
   .event-topbar-right { justify-self: end; display: inline-flex; align-items: center; gap: 8px; }
@@ -1258,7 +1308,7 @@
     border-color: var(--tp-gold-2);
   }
 
-  .event-head { position: relative; text-align: center; margin-bottom: 32px; }
+  .event-head { position: relative; text-align: center; margin-bottom: 32px; z-index: 4; }
   .event-chips { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 
   /* Player-name wrapper — host for the STOLEN stamp overlay */
@@ -1500,32 +1550,99 @@
     font-weight: 600;
   }
 
-  .spinner-stage { position: relative; text-align: center; margin: 56px 0; }
+  .spinner-stage {
+    position: relative;
+    text-align: center;
+    margin: 56px 0;
+    z-index: 3; /* above the darken overlay */
+  }
   .spinner-img {
     width: 260px; height: 260px; object-fit: contain;
-    /* Rotation is JS-driven via inline `transform` so it can decelerate
-       smoothly across the slow phase. The pulse below is layered separately. */
+    will-change: transform, filter;
+    /* Rotation is JS-driven via inline `transform` during spin_fast / spin_slow.
+       Other phases drive scale + opacity + filter via CSS classes below. */
   }
   /* Fallback (no placeholder helmet uploaded) uses CSS-only rotation. */
   .spinner-img.rotating {
     animation: spin 0.55s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-  /* Slow phase: pulsing team-colored drop-shadow. JS handles rotation speed. */
-  .spinner-img.spinning-slow {
-    animation: spinner-pulse 1.4s ease-in-out infinite;
+
+  /* ---- Upset phases — driven by class on the spinner img ---- */
+  /* in: helmet springs in from scale 0 */
+  @keyframes helmet-spring-in {
+    0%   { transform: scale(0);    opacity: 0; }
+    60%  { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
   }
-  @keyframes spinner-pulse {
+  .spinner-img.upset-in {
+    animation: helmet-spring-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  /* pulse: slow team-color glow (idle hum) */
+  @keyframes glowPulse {
     0%, 100% {
       filter:
-        drop-shadow(0 0 8px var(--glow-1, var(--tp-gold)));
+        drop-shadow(0 0 5px var(--glow-1, var(--tp-navy)))
+        drop-shadow(0 0 14px var(--glow-2, var(--tp-gold)));
     }
     50% {
       filter:
-        drop-shadow(0 0 24px var(--glow-1, var(--tp-gold)))
-        drop-shadow(0 0 56px var(--glow-2, var(--tp-navy)))
-        drop-shadow(0 0 80px var(--glow-2, var(--tp-navy)));
+        drop-shadow(0 0 18px var(--glow-1, var(--tp-navy)))
+        drop-shadow(0 0 40px var(--glow-2, var(--tp-gold)))
+        drop-shadow(0 0 62px rgba(244, 236, 221, 0.4));
     }
   }
+  .spinner-img.upset-pulse {
+    animation: glowPulse 2.6s ease-in-out infinite;
+  }
+
+  /* stop_glow: fast intense team-color glow (charging up) */
+  @keyframes glowCharge {
+    0%, 100% {
+      filter:
+        drop-shadow(0 0 10px var(--glow-2, var(--tp-gold)))
+        drop-shadow(0 0 28px var(--glow-1, var(--tp-navy)))
+        drop-shadow(0 0 55px var(--glow-2, var(--tp-gold)));
+    }
+    50% {
+      filter:
+        drop-shadow(0 0 28px var(--glow-2, var(--tp-gold)))
+        drop-shadow(0 0 60px var(--glow-1, var(--tp-navy)))
+        drop-shadow(0 0 90px rgba(244, 236, 221, 0.55));
+    }
+  }
+  .spinner-img.upset-stop-glow {
+    animation: glowCharge 1.1s ease-in-out infinite;
+  }
+
+  /* explode: helmet scales up and fades out. Inline transform is cleared
+     by the $effect at this phase so this rule wins. */
+  .spinner-img.upset-explode {
+    transform: scale(1.6);
+    opacity: 0;
+    transition: transform 0.28s ease-in, opacity 0.22s ease-in;
+  }
+
+  .upset-charge-label {
+    color: var(--tp-cream);
+    font-family: var(--tp-display);
+    font-size: 24px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    animation: glowPulse 1.1s ease-in-out infinite;
+  }
+
+  /* Darken overlay — sits between theater backdrop and the helmet/UI. */
+  .darken-overlay {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    z-index: 1;
+    transition: opacity 0.7s ease;
+    pointer-events: none;
+  }
+
   .explosion-stage { min-height: 360px; }
   .confetti-canvas {
     position: fixed;

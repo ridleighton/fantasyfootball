@@ -6,7 +6,8 @@ import {
   computeSteal,
   computeAutoCommit,
   resolvePhotos,
-  helmetForSchool
+  helmetForSchool,
+  colorsForSchool
 } from '$lib/server/theprogram/show.js';
 
 const CONFERENCES = ['C1', 'C2', 'C3', 'C4', 'C5'];
@@ -76,10 +77,9 @@ export async function load() {
     for (const ev of decorated) {
       ev.display.schools = (ev.display.schools ?? []).map(s => ({
         ...s,
-        helmet: helmetForSchool(photos, s.school)
+        helmet: helmetForSchool(photos, s.school),
+        colors: colorsForSchool(photos, s.school)
       }));
-      // Attach a helmet URL for the committed school for steal events (in case
-      // it isn't already in display.schools).
       if (ev.display.committedSchool) {
         ev.display.committedSchoolHelmet = helmetForSchool(photos, ev.display.committedSchool);
       }

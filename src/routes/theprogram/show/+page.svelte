@@ -1,6 +1,7 @@
 <script>
   import { page } from '$app/stores';
   import { goto, invalidateAll } from '$app/navigation';
+  import { preloadHelmetCanvas, createConfettiBurst } from '$lib/client/theprogram/confetti.js';
 
   let { data } = $props();
 
@@ -73,11 +74,24 @@
   );
 
   // ---------- Roll state ----------
-  let rollState = $state('idle');
+  let rollState = $state('idle'); // 'idle' | 'spinning' | 'exploding' | 'revealed'
   let rollWinner = $state(null);
   let rollOutcome = $state(null);
   let rollCameLate = $state(false);
   let rollError = $state('');
+  // Sub-phase of 'spinning' — 'fast' is the normal high-rpm spin, 'slow' is
+  // the deceleration + pulse before a long-shot commit explodes.
+  let spinPhase = $state('fast');
+  // Colors for the spinner glow on the slow phase + confetti burst. Defaults
+  // to the brand tokens if the winning school has no extracted colors yet.
+  let glowPrimary = $state('#D9A441');
+  let glowSecondary = $state('#B8252C');
+
+  // Confetti canvas (always mounted so we can size + bind to it).
+  let confettiCanvas = $state(null);
+  let confettiController = null;
+
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   $effect(() => {
     void confParam; void eventIndexParam;
@@ -86,9 +100,26 @@
     rollOutcome = null;
     rollCameLate = false;
     rollError = '';
+    spinPhase = 'fast';
     lockedDropValues = {};
     lockedAnimDone = false;
+    if (confettiController) {
+      confettiController.stop();
+      confettiController = null;
+    }
     closeEditor();
+  });
+
+  // Size the confetti canvas to viewport, kept in sync on resize.
+  $effect(() => {
+    if (!confettiCanvas) return;
+    const resize = () => {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
   });
 
   function isSolo(ev) {
@@ -110,7 +141,10 @@
       isSolo(currentEvent) ||
       (currentEvent.kind === 'steal' && currentEvent.display.locked);
 
-    if (!skipSpinner) rollState = 'spinning';
+    if (!skipSpinner) {
+      rollState = 'spinning';
+      spinPhase = 'fast';
+    }
     const startedAt = Date.now();
 
     let serverResult;
@@ -128,9 +162,65 @@
       return;
     }
 
-    const wantedSpin = skipSpinner ? 0 : (3000 + Math.random() * 2000);
-    const remaining = Math.max(0, wantedSpin - (Date.now() - startedAt));
-    if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
+    if (skipSpinner) {
+      rollWinner = serverResult.winner;
+      rollOutcome = serverResult.outcome;
+      rollCameLate = !!serverResult.cameLate;
+      rollState = 'revealed';
+      return;
+    }
+
+    // Long-shot commit detection: winner's normalized odds under 25%.
+    const winnerSchool = currentEvent.display.schools.find(
+      s => s.school?.toLowerCase() === serverResult.winner?.toLowerCase()
+    );
+    const winnerPct = Number(winnerSchool?.normalized ?? 100);
+    const isLongShotCommit = currentEvent.kind === 'commit' && winnerPct < 25;
+
+    if (!isLongShotCommit) {
+      const wantedSpin = 3000 + Math.random() * 2000;
+      const remaining = Math.max(0, wantedSpin - (Date.now() - startedAt));
+      if (remaining > 0) await wait(remaining);
+      rollWinner = serverResult.winner;
+      rollOutcome = serverResult.outcome;
+      rollCameLate = !!serverResult.cameLate;
+      rollState = 'revealed';
+      return;
+    }
+
+    // ---- Long-shot commit flow: fast spin → slow + glow → explode → reveal ----
+    const FAST_MS = 3000;
+    const SLOW_MS = 1800;
+    const EXPLODE_MS = 2400;
+
+    const fastRemaining = Math.max(0, FAST_MS - (Date.now() - startedAt));
+    if (fastRemaining > 0) await wait(fastRemaining);
+
+    // Switch to slow + pulse, painted with the winner's team colors.
+    glowPrimary = winnerSchool?.colors?.primary ?? '#D9A441';
+    glowSecondary = winnerSchool?.colors?.secondary ?? '#B8252C';
+    spinPhase = 'slow';
+
+    // Preload the winner helmet (CORS-stripped) while the spinner slows.
+    const helmetPromise = winnerSchool?.helmet
+      ? preloadHelmetCanvas(winnerSchool.helmet)
+      : Promise.resolve(null);
+
+    await wait(SLOW_MS);
+
+    const helmetCanvas = await helmetPromise;
+
+    // Switch to explode state; spawn confetti burst from screen center.
+    rollState = 'exploding';
+    await wait(20); // let the canvas mount/size before spawning
+    if (confettiCanvas) {
+      confettiController = createConfettiBurst(confettiCanvas, {
+        primary: glowPrimary,
+        secondary: glowSecondary,
+        helmetCanvas
+      });
+    }
+    await wait(EXPLODE_MS);
 
     rollWinner = serverResult.winner;
     rollOutcome = serverResult.outcome;
@@ -516,12 +606,25 @@
     {#if rollState === 'spinning'}
       <div class="spinner-stage">
         {#if data.placeholderHelmet}
-          <img src={data.placeholderHelmet} alt="Rolling…" class="spinner-img" referrerpolicy="no-referrer" />
+          <img
+            src={data.placeholderHelmet}
+            alt="Rolling…"
+            class="spinner-img"
+            class:spinning-slow={spinPhase === 'slow'}
+            style:--glow-1={glowPrimary}
+            style:--glow-2={glowSecondary}
+            referrerpolicy="no-referrer"
+          />
         {:else}
           <div class="spinner-img spinner-fallback">?</div>
         {/if}
-        <div class="spinner-label">Rolling…</div>
+        <div class="spinner-label">{spinPhase === 'slow' ? 'Settling…' : 'Rolling…'}</div>
       </div>
+    {/if}
+
+    <!-- Exploding state: confetti only (canvas is rendered below the page) -->
+    {#if rollState === 'exploding'}
+      <div class="explosion-stage" aria-hidden="true"></div>
     {/if}
 
     <!-- Reveal: locked + stayed are rendered inside the schools view above.
@@ -731,6 +834,14 @@
     </div>
   </div>
 {/if}
+
+<!-- Confetti overlay — always mounted, only visible during the exploding state -->
+<canvas
+  bind:this={confettiCanvas}
+  class="confetti-canvas"
+  class:active={rollState === 'exploding'}
+  aria-hidden="true"
+></canvas>
 
 <style>
   /* ============================================================
@@ -1206,6 +1317,37 @@
     width: 260px; height: 260px; object-fit: contain;
     animation: spin 0.55s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+  /* Long-shot slow phase: slower rotation + pulsing colored drop-shadow tied
+     to the winning team's primary/secondary colors. */
+  .spinner-img.spinning-slow {
+    animation:
+      spin 1.8s linear infinite,
+      spinner-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes spinner-pulse {
+    0%, 100% {
+      filter:
+        drop-shadow(0 0 8px var(--glow-1, var(--tp-gold)));
+    }
+    50% {
+      filter:
+        drop-shadow(0 0 24px var(--glow-1, var(--tp-gold)))
+        drop-shadow(0 0 56px var(--glow-2, var(--tp-navy)))
+        drop-shadow(0 0 80px var(--glow-2, var(--tp-navy)));
+    }
+  }
+  .explosion-stage { min-height: 360px; }
+  .confetti-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 80;
+    opacity: 0;
+    transition: opacity 0.18s ease-out;
+  }
+  .confetti-canvas.active { opacity: 1; }
   .spinner-fallback {
     display: inline-grid; place-items: center;
     background: var(--tp-cream); border-radius: 50%; color: var(--tp-navy); font-size: 100px;

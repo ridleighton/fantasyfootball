@@ -210,27 +210,85 @@ export function computeSteal(group) {
   };
 }
 
-// Auto-commit: equal weights. Tolerant — if the school column is empty, will
-// fall back to parsing the odds string for school names.
+// Auto-commit (new flow):
+//   - `odds` column on each row holds the FULL commit-style odds string for
+//     the underlying recruitment, identical across all rows in the group.
+//     We parse it to build the Phase 1 school list (with thresholds + the
+//     crimson X badge etc — exactly like a commit display).
+//   - `school` column on each row identifies which school submitted the
+//     auto-commit (the "bidders"). One row per bidder; multiple bidders
+//     means multiple rows for the same recruit. We expose this list as
+//     `autoCommitSchools` so the client can run the megaphone burst on
+//     those cards and drop the others.
+//   - Auto-commit eligibility is NOT gated by the threshold — a bidder
+//     who's below the commit cut still wins their auto-commit. The
+//     threshold treatment is purely visual for Phase 1.
+//
+// Legacy fallback: if the odds string has no parsable pairs, fall back to
+// the per-row schools with equal weights so old data still renders.
 export function computeAutoCommit(group) {
-  const schoolsSet = new Set();
+  let pairs = [];
+  for (const r of group.rows) {
+    const found = parseOddsPairs(r.odds);
+    if (found.length > pairs.length) pairs = found;
+  }
+
+  // Collect auto-commit bidders from row.school columns (unique).
+  const acSet = new Set();
   for (const r of group.rows) {
     const sch = (r.school ?? '').trim();
-    if (sch) schoolsSet.add(sch);
+    if (sch) acSet.add(sch);
   }
-  if (schoolsSet.size === 0) {
-    // Fallback: parse odds for school names
-    for (const r of group.rows) {
-      const pairs = parseOddsPairs(r.odds);
-      for (const p of pairs) if (p.school) schoolsSet.add(p.school);
+  const autoCommitSchools = [...acSet];
+
+  if (pairs.length === 0) {
+    // Legacy fallback: no odds string → display equal-weight cards from
+    // the per-row school columns, no threshold.
+    const schools = autoCommitSchools.length > 0
+      ? autoCommitSchools
+      : [];
+    const pct = schools.length > 0 ? 100 / schools.length : 0;
+    return {
+      schools: schools.map(s => ({
+        school: s, normalized: pct, eligible: true, raw: pct
+      })),
+      threshold: 0,
+      autoCommitSchools,
+      solo: autoCommitSchools.length === 1,
+      legacyShape: true
+    };
+  }
+
+  // Dedup parsed pairs (last write wins).
+  const dedup = new Map();
+  for (const p of pairs) dedup.set(p.school, p.percent);
+  const pairsList = [...dedup.entries()].map(([school, percent]) => ({ school, percent }));
+
+  // Apply commit-style threshold + renormalize for Phase 1 display.
+  const list = pairsList.map(p => ({ school: p.school, raw: p.percent }));
+  const threshold = commitThreshold(list.length);
+  for (const s of list) s.eligible = s.raw >= threshold;
+  const totalEligible = list.reduce((a, s) => a + (s.eligible ? s.raw : 0), 0);
+  for (const s of list) {
+    s.normalized = (s.eligible && totalEligible > 0) ? (s.raw / totalEligible) * 100 : 0;
+  }
+
+  // If a bidder isn't already in the parsed odds list, append them at 0%
+  // so the Phase 1 card still renders (auto-commit overrides eligibility,
+  // per the spec — they still win even if they were below the cut).
+  const listLower = new Set(list.map(s => s.school.toLowerCase()));
+  for (const ac of autoCommitSchools) {
+    if (!listLower.has(ac.toLowerCase())) {
+      list.push({ school: ac, raw: 0, eligible: false, normalized: 0 });
     }
   }
-  const schools = [...schoolsSet];
-  const solo = schools.length === 1;
-  const pct = schools.length > 0 ? 100 / schools.length : 0;
+
   return {
-    solo,
-    schools: schools.map(s => ({ school: s, normalized: pct, eligible: true, raw: pct }))
+    schools: list,
+    threshold,
+    autoCommitSchools,
+    solo: autoCommitSchools.length === 1,
+    legacyShape: false
   };
 }
 
@@ -296,14 +354,17 @@ export function executeRoll(group) {
 
   if (type === 'Auto-Commit') {
     const data = computeAutoCommit(group);
-    if (data.solo) {
-      return { outcome: 'auto_commit_solo', winner: data.schools[0].school, display: data };
-    }
-    if (data.schools.length === 0) {
+    const ac = data.autoCommitSchools ?? [];
+    if (ac.length === 0) {
       return { outcome: 'auto_commit_no_schools', winner: null, display: data };
     }
-    const winner = weightedPick(data.schools.map(s => ({ value: s.school, weight: s.normalized })));
-    return { outcome: 'auto_commit', winner, display: data };
+    if (ac.length === 1) {
+      // Sole bidder — wins automatically, no contested roll.
+      return { outcome: 'auto_commit_solo_winner', winner: ac[0], display: data };
+    }
+    // Contested: equal-weight draw among bidders.
+    const winner = weightedPick(ac.map(s => ({ value: s, weight: 1 })));
+    return { outcome: 'auto_commit_contested', winner, display: data };
   }
 
   return { outcome: 'unknown_type', winner: null, display: { schools: [] } };

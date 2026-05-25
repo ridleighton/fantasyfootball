@@ -43,10 +43,11 @@ function outcomeFor(group) {
     return `Steal succeeded — moved to ${winner}`;
   }
   if (group.type === 'Auto-Commit') {
+    // schoolCount here counts rows in the group = number of bidders.
     if (schoolCount === 1) {
-      return `Auto-commit awarded to ${winner} — no roll (sole school)`;
+      return `Auto-commit awarded to ${winner} — sole bidder`;
     }
-    return `Auto-commit awarded to ${winner}`;
+    return `Auto-commit awarded to ${winner} — won contested roll`;
   }
   return '';
 }

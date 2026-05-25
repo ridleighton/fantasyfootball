@@ -108,6 +108,36 @@
   let upsetPhase = $state('off');
   let darkenOpacity = $state(0);
 
+  // Auto-commit phase machine.
+  //   'off'           — not in the auto-commit flow
+  //   'megaphone'     — bursts emitting from each bidder card (~1200ms)
+  //   'fading'        — non-bidder cards fading out (~600ms)
+  //   'solo_done'     — sole-bidder reveal active
+  //   'phase2_ready' — contested: bidder cards visible with equalized odds,
+  //                    awaiting second Roll click
+  //   'phase2_spin'   — contested second spinner running
+  //   'phase2_done'   — contested winner revealed
+  let acPhase = $state('off');
+  let acMegaphonesBySchool = $state({}); // school → [{ dx, dy, delay, duration }]
+  // For contested auto-commits we already know the winner from the first
+  // server call — stash it until the second Roll click finishes its spin.
+  let pendingAcWinner = $state(null);
+  let pendingAcOutcome = $state(null);
+
+  function spawnMegaphoneParticles() {
+    const n = 14;
+    return Array.from({ length: n }, (_, i) => {
+      const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.45;
+      const dist = 90 + Math.random() * 70;
+      return {
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist,
+        delay: Math.random() * 180,
+        duration: 800 + Math.random() * 350
+      };
+    });
+  }
+
   function startSpinLoop() {
     if (spinRaf != null) return;
     const tick = () => {
@@ -175,6 +205,8 @@
     spinPhase = 'fast';
     upsetPhase = 'off';
     darkenOpacity = 0;
+    acPhase = 'off';
+    acMegaphonesBySchool = {};
     lockedDropValues = {};
     lockedAnimDone = false;
     stopSpinLoop();
@@ -237,7 +269,8 @@
 
   function isSolo(ev) {
     if (!ev) return false;
-    if (ev.kind === 'auto' && ev.display.solo) return true;
+    // Auto-commits no longer auto-trigger — they wait for the commissioner
+    // to press "Reveal Auto-Commits".
     if (ev.kind === 'commit' && ev.display.solo) return true;
     // Outcome 4 — only late-joiners tried to steal. No roll needed; the
     // post-roll Stayed-Loyal layout renders directly.
@@ -280,6 +313,39 @@
       rollOutcome = serverResult.outcome;
       rollCameLate = !!serverResult.cameLate;
       rollState = 'revealed';
+      return;
+    }
+
+    // ---- Auto-Commit flow ----
+    if (currentEvent.kind === 'auto') {
+      const acSchools = currentEvent.display.autoCommitSchools ?? [];
+      // Seed megaphone particles per bidder card.
+      const byS = {};
+      for (const s of acSchools) byS[s] = spawnMegaphoneParticles();
+      acMegaphonesBySchool = byS;
+
+      acPhase = 'megaphone';
+      await wait(1200);
+
+      acPhase = 'fading';
+      await wait(600);
+
+      if (acSchools.length <= 1) {
+        // Sole bidder — straight to the winner reveal.
+        rollWinner = serverResult.winner;
+        rollOutcome = serverResult.outcome;
+        rollCameLate = false;
+        acPhase = 'solo_done';
+        rollState = 'revealed';
+      } else {
+        // Contested — stash the server's winner and wait for the Roll click.
+        pendingAcWinner = serverResult.winner;
+        pendingAcOutcome = serverResult.outcome;
+        acPhase = 'phase2_ready';
+        // Drop rollState back to idle so the schools markup re-renders with
+        // the phase-2 layout (equalized odds + second Roll button).
+        rollState = 'idle';
+      }
       return;
     }
 
@@ -377,6 +443,44 @@
     if (currentEvent.savedResult) return; // already done
     if (!isSolo(currentEvent)) return;
     performRoll({ instant: true });
+  });
+
+  // Contested auto-commit second roll. The server already determined the
+  // winner during the first Roll click — the spin here is ceremonial.
+  async function performAcPhase2Roll() {
+    if (acPhase !== 'phase2_ready') return;
+    acPhase = 'phase2_spin';
+    rollState = 'spinning';
+    spinSpeed = REGULAR_SPIN_SPEED;
+    await wait(3200 + Math.random() * 1200);
+    rollWinner = pendingAcWinner;
+    rollOutcome = pendingAcOutcome;
+    rollCameLate = false;
+    acPhase = 'phase2_done';
+    rollState = 'revealed';
+    pendingAcWinner = null;
+    pendingAcOutcome = null;
+  }
+
+  const isAcPhase2 = $derived(
+    currentEvent?.kind === 'auto'
+    && (acPhase === 'phase2_ready' || acPhase === 'phase2_spin' || acPhase === 'phase2_done')
+  );
+
+  const acBiddersLower = $derived(
+    new Set((currentEvent?.display?.autoCommitSchools ?? []).map(s => s.toLowerCase()))
+  );
+
+  // Phase-2 equalized schools — only the bidders, equal odds across them.
+  const acPhase2Schools = $derived.by(() => {
+    if (!currentEvent || currentEvent.kind !== 'auto') return [];
+    const ac = currentEvent.display.autoCommitSchools ?? [];
+    if (ac.length <= 1) return [];
+    const acLower = new Set(ac.map(s => s.toLowerCase()));
+    const pct = 100 / ac.length;
+    return currentEvent.display.schools
+      .filter(s => acLower.has(s.school.toLowerCase()))
+      .map(s => ({ ...s, raw: pct, normalized: pct, eligible: true }));
   });
 
   function nextUnrolledInConf() {
@@ -699,8 +803,9 @@
       <div class="tp-alert tp-alert-error event-alert">{rollError}</div>
     {/if}
 
-    <!-- Schools display — shown pre-roll AND during locked / stayed reveals -->
-    {#if rollState === 'idle' || isLockedReveal() || isStealStayed()}
+    <!-- Schools display — shown pre-roll AND during locked / stayed reveals.
+         Auto-commit Phase 2 (contested) renders a different markup further below. -->
+    {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading' || acPhase === 'solo_done')}
       {@const inPostStealReveal = isLockedReveal() || isStealStayed()}
       <div class="schools" class:schools-locked={isLockedReveal()} class:schools-stayed={isStealStayed()}>
         {#each currentEvent.display.schools as s}
@@ -708,18 +813,38 @@
           {@const showLockSlap = isLockedReveal() && s.isCommitted}
           {@const dropping = inPostStealReveal && !s.isCommitted}
           {@const showLateTag = inPostStealReveal && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
+          {@const isAcBidder = currentEvent.kind === 'auto' && acBiddersLower.has(s.school.toLowerCase())}
+          {@const acFading = currentEvent.kind === 'auto' && acPhase === 'fading' && !isAcBidder}
+          {@const acHidden = currentEvent.kind === 'auto' && acPhase === 'solo_done' && !isAcBidder}
           <div
             class="school-card"
             class:ineligible={s.eligible === false}
             class:committed={currentEvent.kind === 'steal' && s.isCommitted}
             class:locked-active={isLockedReveal()}
             class:stayed-active={isStealStayed()}
+            class:ac-bidder={isAcBidder}
+            class:ac-fading={acFading}
+            class:ac-hidden={acHidden}
+            style:display={acHidden ? 'none' : null}
           >
             {#if currentEvent.kind === 'steal' && s.isCommitted}
               <div class="committed-banner">Currently Committed</div>
             {/if}
             {#if showLateTag}
               <div class="late-banner">Now You're Interested?</div>
+            {/if}
+            {#if isAcBidder && acPhase === 'megaphone'}
+              <div class="megaphone-burst" aria-hidden="true">
+                {#each (acMegaphonesBySchool[s.school] ?? []) as m, i (i)}
+                  <span
+                    class="megaphone"
+                    style:--m-dx="{m.dx}px"
+                    style:--m-dy="{m.dy}px"
+                    style:--m-delay="{m.delay}ms"
+                    style:--m-duration="{m.duration}ms"
+                  >📣</span>
+                {/each}
+              </div>
             {/if}
             <div class="helmet-frame">
               {#if s.helmet}
@@ -850,12 +975,46 @@
               <span class="winner-pct">{winnerPct.toFixed(1)}%</span>
             {/if}
           </div>
+          {#if currentEvent.kind === 'auto' && acPhase === 'solo_done'}
+            <div class="ac-solo-line">
+              <strong>{rollWinner}</strong> has auto-committed
+              <strong>{currentEvent.player}</strong>. Money well spent.
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="reveal-stage">
           <div class="winner-name">No Result</div>
         </div>
       {/if}
+    {/if}
+
+    <!-- Auto-Commit Phase 2 (contested) — bidders only, equalized odds,
+         second Roll button. After Roll click, rollState becomes 'spinning'
+         and this block hides while the regular spinner runs; reveal lands
+         via the standard winner-card markup above. -->
+    {#if currentEvent.kind === 'auto' && acPhase === 'phase2_ready'}
+      <div class="ac-phase2-head">
+        <div class="ac-phase2-eyebrow">Auto-Commit Contested</div>
+        <h2 class="ac-phase2-title tp-stamped-cream">Multiple schools went all in. Roll to decide.</h2>
+      </div>
+      <div class="schools">
+        {#each acPhase2Schools as s (s.school)}
+          <div class="school-card ac-bidder">
+            <div class="helmet-frame">
+              {#if s.helmet}
+                <img src={s.helmet} alt={s.school} class="helmet" referrerpolicy="no-referrer" />
+              {:else}
+                <div class="helmet helmet-placeholder">{s.school[0] ?? '?'}</div>
+              {/if}
+            </div>
+            <div class="school-name">{s.school}</div>
+            <div class="school-pct">
+              <span class="pct-big">{(s.normalized ?? 0).toFixed(1)}<small>%</small></span>
+            </div>
+          </div>
+        {/each}
+      </div>
     {/if}
 
     <!-- Controls -->
@@ -869,10 +1028,14 @@
           <button class="tp-pill" onclick={returnToList}>← Return to List</button>
           <button class="tp-pill tp-pill-gold" onclick={goToNextRecruit}>Next Recruit →</button>
         </div>
-      {:else if rollState === 'idle'}
+      {:else if rollState === 'idle' && acPhase === 'phase2_ready'}
+        <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={performAcPhase2Roll}>
+          Roll
+        </button>
+      {:else if rollState === 'idle' && acPhase === 'off'}
         {#if !isSolo(currentEvent)}
           <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>
-            Roll
+            {currentEvent.kind === 'auto' ? 'Reveal Auto-Commits' : 'Roll'}
           </button>
         {/if}
       {:else if rollState === 'revealed'}
@@ -1782,6 +1945,92 @@
   .pct-big.dropping {
     color: var(--tp-oxblood);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ============================================================
+     Auto-Commit reveal flow
+     ============================================================ */
+  .megaphone-burst {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 9;
+  }
+  .megaphone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 40px;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation:
+      megaphone-burst var(--m-duration, 1000ms) var(--m-delay, 0ms) ease-out forwards;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+  }
+  @keyframes megaphone-burst {
+    0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+    20%  { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+    100% {
+      transform: translate(calc(-50% + var(--m-dx)), calc(-50% + var(--m-dy))) scale(0.55) rotate(40deg);
+      opacity: 0;
+    }
+  }
+  .school-card.ac-bidder {
+    /* Brief gold ring while the burst is firing */
+    box-shadow: 0 0 0 3px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3);
+  }
+  .school-card.ac-fading {
+    animation: ac-card-fade 0.6s ease-out forwards;
+  }
+  @keyframes ac-card-fade {
+    0%   { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.9) translateY(14px); }
+  }
+  .ac-solo-line {
+    margin-top: 18px;
+    font-family: var(--tp-body);
+    font-size: clamp(18px, 2.4vw, 26px);
+    color: var(--tp-cream);
+    font-style: italic;
+    text-align: center;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+    text-shadow: 0 1px 0 var(--tp-navy-dark);
+  }
+  .ac-solo-line strong {
+    font-style: normal;
+    font-family: var(--tp-display-condensed);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tp-gold-soft);
+  }
+  .ac-phase2-head {
+    text-align: center;
+    margin: 8px 0 24px;
+  }
+  .ac-phase2-eyebrow {
+    font-family: var(--tp-display-condensed);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--tp-gold-soft);
+    margin-bottom: 8px;
+  }
+  .ac-phase2-title {
+    font-family: var(--tp-display);
+    font-size: clamp(28px, 4vw, 48px);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1;
+    margin: 0;
   }
 
   /* Stolen reveal — committed card visible, stealer slams on top */

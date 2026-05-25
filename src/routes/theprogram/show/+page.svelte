@@ -136,6 +136,34 @@
 
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // Rubber-stamp animation trigger — double rAF so the browser has a chance
+  // to commit the initial opacity:0 state before the keyframe fires.
+  // Optionally shakes a target element on impact ("thud").
+  function stampIn(node, opts = {}) {
+    let cancelled = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (cancelled) return;
+      node.classList.add('animate');
+      const targetSel = opts.thudTarget;
+      if (targetSel) {
+        const t = typeof targetSel === 'string'
+          ? node.closest(targetSel)
+          : targetSel;
+        if (t && typeof t.animate === 'function') {
+          t.animate([
+            { transform: 'translateY(0) scale(1)' },
+            { transform: 'translateY(7px) scale(0.99)' },
+            { transform: 'translateY(-3px) scale(1.005)' },
+            { transform: 'translateY(0) scale(1)' }
+          ], { duration: 260, easing: 'ease-out' });
+        }
+      }
+    }));
+    return {
+      destroy() { cancelled = true; }
+    };
+  }
+
   $effect(() => {
     void confParam; void eventIndexParam;
     rollState = 'idle';
@@ -601,10 +629,18 @@
       <div class="player-wrap">
         <h1 class="event-player tp-stamped-cream">{currentEvent.player}</h1>
         {#if isStealSuccess()}
-          <div class="player-name-stamp player-stamp-stolen" aria-label="Stolen">STOLEN</div>
+          <div class="rect-stamp player-stamp" use:stampIn={{ thudTarget: '.player-wrap' }} aria-label="Stolen">
+            <div class="rect-stamp-inner">
+              <span class="stamp-label">Stolen</span>
+              <span class="stamp-sub">Tampering Confirmed</span>
+            </div>
+          </div>
         {:else if isStealStayed()}
-          <div class="player-name-stamp player-stamp-stayed" aria-label="Stayed loyal">
-            <span class="psl-l1">Stayed</span><span class="psl-l2">Loyal</span>
+          <div class="rect-stamp player-stamp" use:stampIn={{ thudTarget: '.player-wrap' }} aria-label="Stayed loyal">
+            <div class="rect-stamp-inner">
+              <span class="stamp-label">Loyal</span>
+              <span class="stamp-sub">Commitment Secured</span>
+            </div>
           </div>
         {/if}
       </div>
@@ -649,7 +685,12 @@
                 <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
               {/if}
               {#if showLockSlap}
-                <div class="locked-slap-on-card" aria-label="Locked">LOCKED</div>
+                <div class="rect-stamp card-stamp" use:stampIn={{ thudTarget: '.school-card' }} aria-label="Locked">
+                  <div class="rect-stamp-inner">
+                    <span class="stamp-label">Locked</span>
+                    <span class="stamp-sub">Commitment Ironclad</span>
+                  </div>
+                </div>
               {/if}
             </div>
             <div class="school-name">{s.school}</div>
@@ -1235,45 +1276,118 @@
     margin: 0;
   }
 
-  /* Stamps on the last third of the player name (STOLEN / STAYED LOYAL) */
-  .player-name-stamp {
+  /* ============================================================
+     Rubber-stamp (rect-stamp) — black ink rectangle, drops in.
+     Used for player-name reveals (STOLEN / LOYAL) and the small
+     LOCKED card stamp.
+     ============================================================ */
+  .rect-stamp {
+    --stamp-ink: #111111;
+    --rot: 7deg;
     position: absolute;
-    top: 50%;
-    left: 66%;
-    transform: translate(-30%, -50%) rotate(-8deg);
-    font-family: var(--tp-display);
-    letter-spacing: 0.04em;
-    line-height: 0.9;
-    color: var(--tp-cream);
-    text-transform: uppercase;
+    color: var(--stamp-ink);
+    opacity: 0;
     pointer-events: none;
     z-index: 5;
-    text-shadow:
-      -3px -3px 0 var(--tp-navy-dark),
-       3px -3px 0 var(--tp-navy-dark),
-      -3px  3px 0 var(--tp-navy-dark),
-       3px  3px 0 var(--tp-navy-dark),
-      -5px -5px 0 var(--tp-gold),
-       5px -5px 0 var(--tp-gold),
-      -5px  5px 0 var(--tp-gold),
-       5px  5px 0 var(--tp-gold),
-       0 8px 24px rgba(0, 0, 0, 0.6);
   }
-  .player-stamp-stolen {
-    font-size: clamp(36px, 5vw, 76px);
-    /* Lands ~0.4s after the stealer card finishes settling
-       (3s hold + 0.55s slam + 0.4s pause). */
-    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 4s both;
+  .rect-stamp-inner {
+    border: 5px solid currentColor;
+    padding: 12px 22px;
+    text-align: center;
+    position: relative;
+    background: transparent;
   }
-  .player-stamp-stayed {
-    font-size: clamp(28px, 4vw, 56px);
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 1.4s both;
+  .rect-stamp-inner::before {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border: 1.5px solid currentColor;
+    opacity: 0.35;
+    pointer-events: none;
   }
-  .psl-l1, .psl-l2 { display: block; line-height: 0.85; }
+  .rect-stamp .stamp-label {
+    font-family: 'Bebas Neue', 'Oswald', sans-serif;
+    font-size: 3.4rem;
+    letter-spacing: 8px;
+    line-height: 1;
+    display: block;
+    color: currentColor;
+    text-transform: uppercase;
+  }
+  .rect-stamp .stamp-sub {
+    font-family: 'Courier Prime', ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    display: block;
+    margin-top: 6px;
+    border-top: 1.5px solid currentColor;
+    padding-top: 5px;
+    opacity: 0.65;
+    color: currentColor;
+    text-transform: uppercase;
+  }
+  /* Variant on player name: overlay the right third */
+  .rect-stamp.player-stamp {
+    top: 50%;
+    left: 66%;
+    transform: translate(-30%, -50%) rotate(var(--rot));
+  }
+  /* Variant on a school card: centered, sized down */
+  .rect-stamp.card-stamp {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(var(--rot));
+  }
+  .rect-stamp.card-stamp .rect-stamp-inner { padding: 6px 10px; }
+  .rect-stamp.card-stamp .stamp-label { font-size: 1.4rem; letter-spacing: 4px; }
+  .rect-stamp.card-stamp .stamp-sub  { font-size: 0.45rem; letter-spacing: 1.5px; margin-top: 3px; padding-top: 3px; }
+
+  /* Drop-in animation. Keyframes use var(--rot) so the resting angle is
+     always preserved regardless of scale phase. */
+  @keyframes stampDown {
+    0% {
+      transform: translate(-30%, -50%) scale(2.8) rotate(var(--rot));
+      opacity: 0;
+      filter: blur(6px);
+    }
+    55% {
+      transform: translate(-30%, -50%) scale(0.90) rotate(var(--rot));
+      opacity: 1;
+      filter: blur(0);
+    }
+    72% {
+      transform: translate(-30%, -50%) scale(1.06) rotate(var(--rot));
+    }
+    100% {
+      transform: translate(-30%, -50%) scale(1) rotate(var(--rot));
+      opacity: 1;
+    }
+  }
+  @keyframes stampDownCenter {
+    0% {
+      transform: translate(-50%, -50%) scale(2.8) rotate(var(--rot));
+      opacity: 0;
+      filter: blur(6px);
+    }
+    55% {
+      transform: translate(-50%, -50%) scale(0.90) rotate(var(--rot));
+      opacity: 1;
+      filter: blur(0);
+    }
+    72% {
+      transform: translate(-50%, -50%) scale(1.06) rotate(var(--rot));
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1) rotate(var(--rot));
+      opacity: 1;
+    }
+  }
+  .rect-stamp.player-stamp.animate {
+    animation: stampDown 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .rect-stamp.card-stamp.animate {
+    animation: stampDownCenter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
 
   /* "Now you're interested?" pre-roll tag on late-joiner school cards */
   .late-banner {
@@ -1518,57 +1632,7 @@
     text-shadow: 0 2px 0 var(--tp-navy-dark);
   }
 
-  /* Slap overlays — sit on top of the winner / locked card */
-  .stolen-slap,
-  .failed-slap,
-  .locked-slap {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-8deg);
-    font-family: var(--tp-display);
-    letter-spacing: 0.04em;
-    color: var(--tp-cream);
-    text-transform: uppercase;
-    line-height: 0.85;
-    text-align: center;
-    pointer-events: none;
-    z-index: 5;
-    text-shadow:
-      -3px -3px 0 var(--tp-navy-dark),
-       3px -3px 0 var(--tp-navy-dark),
-      -3px  3px 0 var(--tp-navy-dark),
-       3px  3px 0 var(--tp-navy-dark),
-       0 0 12px rgba(0, 0, 0, 0.9),
-       0 14px 30px rgba(0, 0, 0, 0.55);
-    animation: slap 0.4s cubic-bezier(0.18, 1.4, 0.5, 1);
-  }
-  .stolen-slap {
-    font-size: clamp(80px, 14vw, 200px);
-    color: var(--tp-cream);
-    text-shadow:
-      -3px -3px 0 var(--tp-navy-dark),
-       3px -3px 0 var(--tp-navy-dark),
-      -3px  3px 0 var(--tp-navy-dark),
-       3px  3px 0 var(--tp-navy-dark),
-      -6px -6px 0 var(--tp-gold),
-       6px -6px 0 var(--tp-gold),
-      -6px  6px 0 var(--tp-gold),
-       6px  6px 0 var(--tp-gold),
-       0 14px 36px rgba(0, 0, 0, 0.7);
-  }
-  .failed-slap,
-  .locked-slap {
-    font-size: clamp(56px, 9vw, 124px);
-    color: var(--tp-cream);
-  }
-  @keyframes slap {
-    from { transform: translate(-50%, -50%) rotate(-8deg) scale(0.3); opacity: 0; }
-    60%  { transform: translate(-50%, -50%) rotate(-8deg) scale(1.15); opacity: 1; }
-    to   { transform: translate(-50%, -50%) rotate(-8deg) scale(1); }
-  }
-
-  /* Locked steal — schools view augmented with bars + LOCKED slam */
+  /* Locked steal — schools view augmented with bars + LOCKED rect-stamp */
   .schools-locked .school-card.committed {
     /* Pulse halo to draw attention to the locked one */
     animation: locked-pulse 1.5s ease-in-out infinite;
@@ -1587,32 +1651,6 @@
     pointer-events: none;
     animation: bars-drop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
     z-index: 3;
-  }
-  .locked-slap-on-card {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-8deg);
-    font-family: var(--tp-display);
-    font-size: clamp(28px, 4vw, 48px);
-    line-height: 0.85;
-    color: var(--tp-cream);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    text-align: center;
-    pointer-events: none;
-    z-index: 6;
-    text-shadow:
-      -2px -2px 0 var(--tp-navy-dark),
-       2px -2px 0 var(--tp-navy-dark),
-      -2px  2px 0 var(--tp-navy-dark),
-       2px  2px 0 var(--tp-navy-dark),
-      -4px -4px 0 var(--tp-gold),
-       4px -4px 0 var(--tp-gold),
-      -4px  4px 0 var(--tp-gold),
-       4px  4px 0 var(--tp-gold),
-       0 6px 18px rgba(0, 0, 0, 0.7);
-    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 0.7s both;
   }
   .pct-big.dropping {
     color: var(--tp-oxblood);

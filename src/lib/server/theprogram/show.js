@@ -210,28 +210,23 @@ export function computeSteal(group) {
   };
 }
 
-// Auto-commit (new flow):
-//   - `odds` column on each row holds the FULL commit-style odds string for
-//     the underlying recruitment, identical across all rows in the group.
-//     We parse it to build the Phase 1 school list (with thresholds + the
-//     crimson X badge etc — exactly like a commit display).
+// Auto-commit:
+//   - `odds` column on each row holds the FULL commit-style odds string
+//     for the underlying recruitment, identical across all rows in the
+//     group. We parse it the same way commits do — same parser, same
+//     thresholds, same renormalization — by delegating to computeCommit.
 //   - `school` column on each row identifies which school submitted the
-//     auto-commit (the "bidders"). One row per bidder; multiple bidders
-//     means multiple rows for the same recruit. We expose this list as
-//     `autoCommitSchools` so the client can run the megaphone burst on
-//     those cards and drop the others.
+//     auto-commit (the "bidders"). One row per bidder. We expose this
+//     list as `autoCommitSchools` so the client can run the megaphone
+//     burst on those cards and drop the others.
 //   - Auto-commit eligibility is NOT gated by the threshold — a bidder
 //     who's below the commit cut still wins their auto-commit. The
-//     threshold treatment is purely visual for Phase 1.
-//
-// Legacy fallback: if the odds string has no parsable pairs, fall back to
-// the per-row schools with equal weights so old data still renders.
+//     threshold treatment is purely visual for Phase 1, so any bidder
+//     not already in the parsed pool is appended at 0% / ineligible
+//     just to ensure their card renders.
 export function computeAutoCommit(group) {
-  let pairs = [];
-  for (const r of group.rows) {
-    const found = parseOddsPairs(r.odds);
-    if (found.length > pairs.length) pairs = found;
-  }
+  // Identical parse + threshold + normalization as a Commit event.
+  const { schools, threshold } = computeCommit(group);
 
   // Collect auto-commit bidders from row.school columns (unique).
   const acSet = new Set();
@@ -241,41 +236,9 @@ export function computeAutoCommit(group) {
   }
   const autoCommitSchools = [...acSet];
 
-  if (pairs.length === 0) {
-    // Legacy fallback: no odds string → display equal-weight cards from
-    // the per-row school columns, no threshold.
-    const schools = autoCommitSchools.length > 0
-      ? autoCommitSchools
-      : [];
-    const pct = schools.length > 0 ? 100 / schools.length : 0;
-    return {
-      schools: schools.map(s => ({
-        school: s, normalized: pct, eligible: true, raw: pct
-      })),
-      threshold: 0,
-      autoCommitSchools,
-      solo: autoCommitSchools.length === 1,
-      legacyShape: true
-    };
-  }
-
-  // Dedup parsed pairs (last write wins).
-  const dedup = new Map();
-  for (const p of pairs) dedup.set(p.school, p.percent);
-  const pairsList = [...dedup.entries()].map(([school, percent]) => ({ school, percent }));
-
-  // Apply commit-style threshold + renormalize for Phase 1 display.
-  const list = pairsList.map(p => ({ school: p.school, raw: p.percent }));
-  const threshold = commitThreshold(list.length);
-  for (const s of list) s.eligible = s.raw >= threshold;
-  const totalEligible = list.reduce((a, s) => a + (s.eligible ? s.raw : 0), 0);
-  for (const s of list) {
-    s.normalized = (s.eligible && totalEligible > 0) ? (s.raw / totalEligible) * 100 : 0;
-  }
-
-  // If a bidder isn't already in the parsed odds list, append them at 0%
-  // so the Phase 1 card still renders (auto-commit overrides eligibility,
-  // per the spec — they still win even if they were below the cut).
+  // Ensure every bidder shows up as a card even if they weren't in the
+  // parsed odds pool (or were dropped below the threshold).
+  const list = [...schools];
   const listLower = new Set(list.map(s => s.school.toLowerCase()));
   for (const ac of autoCommitSchools) {
     if (!listLower.has(ac.toLowerCase())) {
@@ -287,8 +250,7 @@ export function computeAutoCommit(group) {
     schools: list,
     threshold,
     autoCommitSchools,
-    solo: autoCommitSchools.length === 1,
-    legacyShape: false
+    solo: autoCommitSchools.length === 1
   };
 }
 

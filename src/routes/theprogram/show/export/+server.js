@@ -38,7 +38,7 @@ function outcomeFor(group) {
   if (group.type === 'Steal') {
     if (isLocked) return 'Steal failed — locked';
     if (committedSchool && winner.toLowerCase() === committedSchool.toLowerCase()) {
-      return 'Steal failed — lost roll';
+      return 'Steal failed — stayed loyal';
     }
     return `Steal succeeded — moved to ${winner}`;
   }

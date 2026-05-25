@@ -194,9 +194,18 @@ export function computeSteal(group) {
     return a.school.localeCompare(b.school, undefined, { sensitivity: 'base' });
   });
 
+  // Late-joiners (in_original_roll === false) are disqualified from the
+  // draw. If no eligible stealers remain (only late-joiners attempted),
+  // the steal can't really happen — no roll at all.
+  const eligibleStealerCount = decorated.filter(
+    s => !s.isCommitted && s.inOriginalRoll !== false
+  ).length;
+  const noRealAttempt = !isLocked && eligibleStealerCount === 0;
+
   return {
     locked: isLocked,
     committedSchool,
+    noRealAttempt,
     schools: decorated
   };
 }
@@ -259,24 +268,30 @@ export function executeRoll(group) {
   if (type === 'Steal') {
     const data = computeSteal(group);
     if (data.locked) {
-      return { outcome: 'steal_failed_locked', winner: data.committedSchool, display: data };
+      // Save null so the result column gets the 'LOCKED' marker downstream.
+      return { outcome: 'steal_failed_locked', winner: null, display: data };
     }
     if (data.schools.length === 0) {
       return { outcome: 'steal_no_schools', winner: null, display: data };
     }
-    const winner = weightedPick(data.schools.map(s => ({ value: s.school, weight: s.normalized })));
+    // Outcome 4: only late-joiners attempted. No roll, player stays.
+    if (data.noRealAttempt) {
+      return {
+        outcome: 'steal_no_real_attempt',
+        winner: data.committedSchool,
+        display: data
+      };
+    }
+    // Build the roll pool: committed + eligible (non-late) stealers, equal weights.
+    const eligible = data.schools.filter(
+      s => s.isCommitted || s.inOriginalRoll !== false
+    );
+    const winner = weightedPick(eligible.map(s => ({ value: s.school, weight: 1 })));
     const isStay = data.committedSchool && winner && winner.toLowerCase() === data.committedSchool.toLowerCase();
     if (isStay) {
       return { outcome: 'steal_failed_stayed', winner, display: data };
     }
-    const winningRow = group.rows.find(r => (r.school ?? '').trim().toLowerCase() === winner.toLowerCase());
-    const cameLate = winningRow?.in_original_roll === false;
-    return {
-      outcome: cameLate ? 'steal_succeeded_late' : 'steal_succeeded',
-      winner,
-      cameLate,
-      display: data
-    };
+    return { outcome: 'steal_succeeded', winner, display: data };
   }
 
   if (type === 'Auto-Commit') {

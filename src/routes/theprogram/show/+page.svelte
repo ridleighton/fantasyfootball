@@ -95,6 +95,9 @@
     if (!ev) return false;
     if (ev.kind === 'auto' && ev.display.solo) return true;
     if (ev.kind === 'commit' && ev.display.solo) return true;
+    // Outcome 4 — only late-joiners tried to steal. No roll needed; the
+    // post-roll Stayed-Loyal layout renders directly.
+    if (ev.kind === 'steal' && ev.display.noRealAttempt) return true;
     return false;
   }
 
@@ -229,6 +232,13 @@
       && rollState === 'revealed'
       && rollOutcome === 'steal_failed_locked';
   }
+  // Outcomes 3 and 4 — both keep the schools view mounted with the same
+  // bars + odds-drop + STAYED LOYAL stamp treatment.
+  function isStealStayed() {
+    return currentEvent?.kind === 'steal'
+      && rollState === 'revealed'
+      && (rollOutcome === 'steal_failed_stayed' || rollOutcome === 'steal_no_real_attempt');
+  }
 
   // ---------- Locked-reveal odds drop animation ----------
   let lockedDropValues = $state({});
@@ -258,7 +268,7 @@
   }
 
   $effect(() => {
-    if (isLockedReveal()) startLockedAnimation();
+    if (isLockedReveal() || isStealStayed()) startLockedAnimation();
   });
 
   // ---------- Edit panel ----------
@@ -437,6 +447,10 @@
         <h1 class="event-player tp-stamped-cream">{currentEvent.player}</h1>
         {#if isStealSuccess()}
           <div class="player-name-stamp player-stamp-stolen" aria-label="Stolen">STOLEN</div>
+        {:else if isStealStayed()}
+          <div class="player-name-stamp player-stamp-stayed" aria-label="Stayed loyal">
+            <span class="psl-l1">Stayed</span><span class="psl-l2">Loyal</span>
+          </div>
         {/if}
       </div>
     </header>
@@ -445,23 +459,26 @@
       <div class="tp-alert tp-alert-error event-alert">{rollError}</div>
     {/if}
 
-    <!-- Schools display — shown pre-roll AND during locked reveal -->
-    {#if rollState === 'idle' || isLockedReveal()}
-      <div class="schools" class:schools-locked={isLockedReveal()}>
+    <!-- Schools display — shown pre-roll AND during locked / stayed reveals -->
+    {#if rollState === 'idle' || isLockedReveal() || isStealStayed()}
+      {@const inPostStealReveal = isLockedReveal() || isStealStayed()}
+      <div class="schools" class:schools-locked={isLockedReveal()} class:schools-stayed={isStealStayed()}>
         {#each currentEvent.display.schools as s}
-          {@const showBars = isLockedReveal() && !s.isCommitted && data.barsImage}
+          {@const showBars = inPostStealReveal && !s.isCommitted && data.barsImage}
           {@const showLockSlap = isLockedReveal() && s.isCommitted}
-          {@const dropping = isLockedReveal() && !s.isCommitted}
+          {@const dropping = inPostStealReveal && !s.isCommitted}
+          {@const showLateTag = inPostStealReveal && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
           <div
             class="school-card"
             class:ineligible={s.eligible === false}
             class:committed={currentEvent.kind === 'steal' && s.isCommitted}
             class:locked-active={isLockedReveal()}
+            class:stayed-active={isStealStayed()}
           >
             {#if currentEvent.kind === 'steal' && s.isCommitted}
               <div class="committed-banner">Currently Committed</div>
             {/if}
-            {#if rollState === 'idle' && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
+            {#if showLateTag}
               <div class="late-banner">Now You're Interested?</div>
             {/if}
             <div class="helmet-frame">
@@ -507,14 +524,15 @@
       </div>
     {/if}
 
-    <!-- Reveal: non-locked outcomes (locked uses the schools view above) -->
-    {#if rollState === 'revealed' && !isLockedReveal()}
+    <!-- Reveal: locked + stayed are rendered inside the schools view above.
+         This block handles stolen, commit, and auto-commit. -->
+    {#if rollState === 'revealed' && !isLockedReveal() && !isStealStayed()}
       {#if isStealSuccess()}
         {@const stealerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
         {@const stealerHelmet = stealerSchool?.helmet}
         {@const committedSchool = currentEvent.display.schools.find(s => s.isCommitted)}
         {@const committedHelmet = committedSchool?.helmet ?? currentEvent.display.committedSchoolHelmet}
-        <!-- Stolen reveal: committed card visible, stealer card slams on top -->
+        <!-- Stolen reveal: committed card visible alone, then stealer card slams on top -->
         <div class="reveal-stage steal-success">
           <div class="stolen-stack">
             <div class="winner-card committed-base">
@@ -530,26 +548,6 @@
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
-          </div>
-          <div class="winner-name tp-stamped-cream">{rollWinner}</div>
-        </div>
-      {:else if isStealFailedNotLocked()}
-        {@const winnerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
-        {@const winnerHelmet = winnerSchool?.helmet}
-        <div class="reveal-stage">
-          <div class="winner-card-wrap">
-            <div class="winner-card">
-              {#if winnerHelmet}
-                <img src={winnerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
-              {:else}
-                <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
-              {/if}
-              {#if data.barsImage}
-                <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
-              {/if}
-            </div>
-            <div class="winner-ring" aria-hidden="true"></div>
-            <div class="failed-slap" aria-label="Steal failed">STEAL<br/>FAILED</div>
           </div>
           <div class="winner-name tp-stamped-cream">{rollWinner}</div>
         </div>
@@ -1052,14 +1050,13 @@
     margin: 0;
   }
 
-  /* STOLEN stamp on the last third of the player name */
+  /* Stamps on the last third of the player name (STOLEN / STAYED LOYAL) */
   .player-name-stamp {
     position: absolute;
     top: 50%;
     left: 66%;
     transform: translate(-30%, -50%) rotate(-8deg);
     font-family: var(--tp-display);
-    font-size: clamp(36px, 5vw, 76px);
     letter-spacing: 0.04em;
     line-height: 0.9;
     color: var(--tp-cream);
@@ -1076,8 +1073,21 @@
       -5px  5px 0 var(--tp-gold),
        5px  5px 0 var(--tp-gold),
        0 8px 24px rgba(0, 0, 0, 0.6);
-    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 0.6s both;
   }
+  .player-stamp-stolen {
+    font-size: clamp(36px, 5vw, 76px);
+    /* Lands ~1s after the stealer card finishes settling (slam delay 1.2s + slam 0.55s + dramatic pause) */
+    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 2.2s both;
+  }
+  .player-stamp-stayed {
+    font-size: clamp(28px, 4vw, 56px);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    animation: slap 0.45s cubic-bezier(0.18, 1.4, 0.5, 1) 1.4s both;
+  }
+  .psl-l1, .psl-l2 { display: block; line-height: 0.85; }
 
   /* "Now you're interested?" pre-roll tag on late-joiner school cards */
   .late-banner {
@@ -1428,7 +1438,8 @@
   }
   .stolen-stack .stealer-slam {
     z-index: 4;
-    animation: stealer-slam 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both;
+    /* Held for 1.2s while the committed card sits alone for drama, then slams. */
+    animation: stealer-slam 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 1.2s both;
   }
   @keyframes stealer-slam {
     0%   { transform: translateY(-180vh) scale(1.6) rotate(-12deg); opacity: 0; }

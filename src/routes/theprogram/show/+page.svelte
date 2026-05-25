@@ -701,14 +701,16 @@
         {@const stealerHelmet = stealerSchool?.helmet}
         {@const committedSchool = currentEvent.display.schools.find(s => s.isCommitted)}
         {@const committedHelmet = committedSchool?.helmet ?? currentEvent.display.committedSchoolHelmet}
+        {@const committedName = committedSchool?.school ?? currentEvent.display.committedSchool ?? ''}
         <!-- Stolen reveal: committed card visible alone, then stealer card slams on top -->
         <div class="reveal-stage steal-success">
           <div class="stolen-stack">
             <div class="winner-card committed-base">
               {#if committedHelmet}
-                <img src={committedHelmet} alt={committedSchool?.school ?? ''} class="winner-img" referrerpolicy="no-referrer" />
+                <img src={committedHelmet} alt={committedName} class="winner-img" referrerpolicy="no-referrer" />
+              {:else}
+                <div class="winner-img helmet-placeholder">{committedName?.[0]?.toUpperCase() ?? '?'}</div>
               {/if}
-              <div class="committed-tag">Committed To</div>
             </div>
             <div class="winner-card stealer-slam">
               {#if stealerHelmet}
@@ -717,6 +719,12 @@
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
+            <!-- Tag + committed school name sit on the stack so they aren't
+                 covered by the slamming card; they fade out as the slam lands. -->
+            <div class="committed-tag">Committed To</div>
+            {#if committedName}
+              <div class="committed-name">{committedName}</div>
+            {/if}
           </div>
           <div class="winner-name tp-stamped-cream">{rollWinner}</div>
         </div>
@@ -1632,7 +1640,7 @@
   }
   .committed-tag {
     position: absolute;
-    top: -16px;
+    top: -22px;
     left: 50%;
     transform: translateX(-50%);
     background: var(--tp-gold);
@@ -1646,6 +1654,29 @@
     border-radius: 2px;
     white-space: nowrap;
     box-shadow: 0 2px 0 var(--tp-gold-2);
+    z-index: 5;
+    /* Fades out just before the stealer card lands. */
+    animation: committed-fade-out 0.3s ease 2.85s both;
+  }
+  .committed-name {
+    position: absolute;
+    bottom: -38px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--tp-display-condensed);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tp-cream);
+    white-space: nowrap;
+    text-shadow: 0 2px 0 var(--tp-navy-dark);
+    z-index: 5;
+    animation: committed-fade-out 0.3s ease 2.85s both;
+  }
+  @keyframes committed-fade-out {
+    from { opacity: 1; transform: translateX(-50%) translateY(0); }
+    to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
   }
   .stolen-stack .stealer-slam {
     z-index: 4;

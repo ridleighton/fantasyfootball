@@ -1189,7 +1189,11 @@
     display: grid;
     place-items: center;
     background:
-      radial-gradient(ellipse at top, var(--tp-navy-2) 0%, var(--tp-navy) 60%, var(--tp-navy-dark) 100%);
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.55) 0%,
+        rgba(184, 37, 44, 0.55) 60%,
+        rgba(140, 27, 34, 0.7) 100%),
+      #1a0608;
     padding: 48px 24px;
   }
   .stage-card {
@@ -1269,7 +1273,11 @@
   .launcher {
     min-height: calc(100vh - 80px);
     background:
-      radial-gradient(ellipse at top, var(--tp-navy-2) 0%, var(--tp-navy) 55%, var(--tp-navy-dark) 100%);
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.55) 0%,
+        rgba(184, 37, 44, 0.55) 55%,
+        rgba(140, 27, 34, 0.7) 100%),
+      #1a0608;
     color: var(--tp-cream);
     padding: 40px 32px 56px;
     position: relative;
@@ -1407,7 +1415,11 @@
   .theater {
     min-height: calc(100vh - 80px);
     background:
-      radial-gradient(ellipse at top, var(--tp-navy-2) 0%, var(--tp-navy) 55%, var(--tp-navy-dark) 100%);
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.55) 0%,
+        rgba(184, 37, 44, 0.55) 55%,
+        rgba(140, 27, 34, 0.7) 100%),
+      #1a0608;
     color: var(--tp-cream);
     padding: 28px 32px 56px;
     position: relative;

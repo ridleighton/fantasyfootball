@@ -1,7 +1,19 @@
-// ---------------- Drive image URL ----------------
+import { imgurDirectUrl } from './imgur.js';
+
+// ---------------- Image URL resolution ----------------
+// Prefers the new image_url column (Imgur or any direct image host);
+// falls back to a legacy google_file_id for rows not yet migrated.
 export function driveImageUrl(id, size = 'w800') {
   if (!id) return null;
   return `https://drive.google.com/thumbnail?id=${id}&sz=${size}`;
+}
+
+export function photoUrl(row, size = 'w800') {
+  if (!row) return null;
+  const direct = imgurDirectUrl(row.image_url);
+  if (direct) return direct;
+  if (row.google_file_id) return driveImageUrl(row.google_file_id, size);
+  return null;
 }
 
 // ---------------- Odds parsing ----------------
@@ -266,7 +278,7 @@ export function executeRoll(group) {
 export async function resolvePhotos(db, schoolNames) {
   const lowered = [...new Set(schoolNames.filter(Boolean).map(s => s.toLowerCase()))];
   const result = {
-    schoolHelmets: {},
+    schoolHelmets: {},         // lowered school → { url, primary, secondary }
     placeholder: null,
     locked: null,
     bars: null,
@@ -275,7 +287,8 @@ export async function resolvePhotos(db, schoolNames) {
 
   if (lowered.length > 0) {
     const res = await db.query(
-      `SELECT school, google_file_id FROM program_photos
+      `SELECT school, image_url, google_file_id, primary_color, secondary_color
+         FROM program_photos
         WHERE type = 'School Helmet' AND LOWER(school) = ANY($1::text[])`,
       [lowered]
     );
@@ -283,30 +296,35 @@ export async function resolvePhotos(db, schoolNames) {
     for (const r of res.rows) {
       const k = (r.school ?? '').toLowerCase();
       if (!grouped.has(k)) grouped.set(k, []);
-      grouped.get(k).push(r.google_file_id);
+      grouped.get(k).push(r);
     }
-    for (const [k, ids] of grouped) {
-      result.schoolHelmets[k] = driveImageUrl(ids[Math.floor(Math.random() * ids.length)]);
+    for (const [k, rows] of grouped) {
+      const pick = rows[Math.floor(Math.random() * rows.length)];
+      result.schoolHelmets[k] = {
+        url: photoUrl(pick),
+        primary: pick.primary_color ?? null,
+        secondary: pick.secondary_color ?? null
+      };
     }
   }
 
   const specials = await db.query(
-    `SELECT type, google_file_id FROM program_photos
+    `SELECT type, image_url, google_file_id FROM program_photos
       WHERE type IN ('Placeholder Helmet', 'Locked Image', 'Bars', 'Logo')
       ORDER BY id ASC`
   );
   for (const r of specials.rows) {
     if (r.type === 'Placeholder Helmet' && !result.placeholder) {
-      result.placeholder = driveImageUrl(r.google_file_id, 'w600');
+      result.placeholder = photoUrl(r, 'w600');
     }
     if (r.type === 'Locked Image' && !result.locked) {
-      result.locked = driveImageUrl(r.google_file_id, 'w600');
+      result.locked = photoUrl(r, 'w600');
     }
     if (r.type === 'Bars' && !result.bars) {
-      result.bars = driveImageUrl(r.google_file_id, 'w600');
+      result.bars = photoUrl(r, 'w600');
     }
     if (r.type === 'Logo' && !result.logo) {
-      result.logo = driveImageUrl(r.google_file_id, 'w400');
+      result.logo = photoUrl(r, 'w400');
     }
   }
   return result;
@@ -314,5 +332,12 @@ export async function resolvePhotos(db, schoolNames) {
 
 export function helmetForSchool(photos, schoolName) {
   if (!schoolName) return null;
-  return photos.schoolHelmets[schoolName.toLowerCase()] ?? null;
+  return photos.schoolHelmets[schoolName.toLowerCase()]?.url ?? null;
+}
+
+export function colorsForSchool(photos, schoolName) {
+  if (!schoolName) return null;
+  const h = photos.schoolHelmets[schoolName.toLowerCase()];
+  if (!h) return null;
+  return { primary: h.primary, secondary: h.secondary };
 }

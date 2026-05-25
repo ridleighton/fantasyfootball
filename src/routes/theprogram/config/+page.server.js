@@ -9,10 +9,14 @@ function nullable(v) {
   return s === '' ? null : s;
 }
 
-function required(v) {
+function normalizeHex(v) {
   const s = nullable(v);
-  if (!s) throw new Error('required field is empty');
-  return s;
+  if (!s) return null;
+  const m = s.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  return '#' + h.toLowerCase();
 }
 
 async function syncTable(db, opts) {
@@ -26,8 +30,8 @@ async function syncTable(db, opts) {
 
   for (const row of incoming) {
     const idNum = Number.parseInt(row.id, 10);
-    const values = rowToValues(row); // throws if invalid
-    if (values == null) continue; // skip empty rows
+    const values = rowToValues(row);
+    if (values == null) continue;
 
     if (Number.isInteger(idNum) && existingIds.has(idNum)) {
       keptIds.add(idNum);
@@ -55,10 +59,23 @@ async function syncTable(db, opts) {
 export async function load() {
   const db = await createClient();
   try {
+    // Safety net: make sure the new columns exist (no-op if they already do).
+    await db.query(`
+      ALTER TABLE program_photos
+        ADD COLUMN IF NOT EXISTS image_url TEXT,
+        ADD COLUMN IF NOT EXISTS primary_color VARCHAR(7),
+        ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(7)
+    `).catch(() => {});
+
     const [confRes, schoolRes, photoRes] = await Promise.all([
       db.query(`SELECT id, name FROM program_conferences ORDER BY name ASC`),
       db.query(`SELECT id, name, conference FROM program_schools ORDER BY conference ASC, name ASC`),
-      db.query(`SELECT id, type, school, google_file_id FROM program_photos ORDER BY type ASC, school ASC NULLS LAST`)
+      db.query(
+        `SELECT id, type, school, image_url, google_file_id,
+                primary_color, secondary_color
+           FROM program_photos
+          ORDER BY type ASC, school ASC NULLS LAST`
+      )
     ]);
     return {
       conferences: confRes.rows,
@@ -125,18 +142,20 @@ export const actions = {
 
       await syncTable(db, {
         table: 'program_photos',
-        columns: ['type', 'school', 'google_file_id'],
+        columns: ['type', 'school', 'image_url', 'primary_color', 'secondary_color'],
         existing: photoRes.rows,
         incoming: photos,
         rowToValues: (r) => {
           const type = nullable(r.type);
           const school = nullable(r.school);
-          const fileId = nullable(r.google_file_id);
-          if (!type && !school && !fileId) return null;
+          const imageUrl = nullable(r.image_url);
+          const primary = normalizeHex(r.primary_color);
+          const secondary = normalizeHex(r.secondary_color);
+          if (!type && !school && !imageUrl) return null;
           if (!type) throw new Error('Photo type is required.');
           if (!PHOTO_TYPES.includes(type)) throw new Error(`Unknown photo type "${type}".`);
-          if (!fileId) throw new Error('Google File ID is required.');
-          return [type, school, fileId];
+          if (!imageUrl) throw new Error('Image URL is required.');
+          return [type, school, imageUrl, primary, secondary];
         }
       });
 

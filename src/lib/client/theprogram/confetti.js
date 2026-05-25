@@ -4,34 +4,55 @@
 //   createConfettiBurst(canvas, opts) — spawns ~240 particles and runs the RAF loop
 //   The returned controller has stop().
 
-export async function preloadHelmetCanvas(url, threshold = 40) {
-  if (!url) return null;
+function loadImageEl(url, useCors) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      try {
-        const data = ctx.getImageData(0, 0, c.width, c.height);
-        const d = data.data;
-        for (let i = 0; i < d.length; i += 4) {
-          if (d[i] < threshold && d[i + 1] < threshold && d[i + 2] < threshold) {
-            d[i + 3] = 0;
-          }
-        }
-        ctx.putImageData(data, 0, 0);
-      } catch {
-        // CORS taint — return the raw drawing
-      }
-      resolve(c);
-    };
+    if (useCors) img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = url;
   });
+}
+
+// Load + bg-strip a helmet for use as confetti.
+// First tries with crossOrigin='anonymous' so we can read pixels and strip
+// the dark background. If that load fails (some hosts respond fine to a
+// regular <img> but reject CORS preflight), fall back to a non-CORS load:
+// the resulting canvas is "tainted" — getImageData / toDataURL throw —
+// but drawImage() onto another canvas still works, so the helmet is still
+// drawable as confetti, just with its original background intact.
+export async function preloadHelmetCanvas(url, threshold = 40) {
+  if (!url) return null;
+
+  let img = await loadImageEl(url, true);
+  let tainted = false;
+  if (!img) {
+    img = await loadImageEl(url, false);
+    tainted = true;
+  }
+  if (!img || !img.naturalWidth || !img.naturalHeight) return null;
+
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  if (!tainted) {
+    try {
+      const data = ctx.getImageData(0, 0, c.width, c.height);
+      const d = data.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] < threshold && d[i + 1] < threshold && d[i + 2] < threshold) {
+          d[i + 3] = 0;
+        }
+      }
+      ctx.putImageData(data, 0, 0);
+    } catch {
+      // Canvas was unexpectedly tainted — leave the raw drawing in place.
+    }
+  }
+  return c;
 }
 
 export function createConfettiBurst(canvas, opts = {}) {

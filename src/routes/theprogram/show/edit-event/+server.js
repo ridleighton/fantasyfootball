@@ -50,35 +50,40 @@ export async function POST({ request }) {
     const ev = events[body.eventIndex];
     if (!ev) throw error(404, 'Event not found.');
 
-    const keptLower = new Set(incoming.map(s => s.school.toLowerCase()));
-    const idsToDelete = ev.rows
-      .filter(r => !keptLower.has((r.school ?? '').trim().toLowerCase()))
-      .map(r => r.id);
-    const idsToKeep = ev.rows
-      .filter(r => keptLower.has((r.school ?? '').trim().toLowerCase()))
-      .map(r => r.id);
-
-    if (idsToDelete.length > 0) {
-      await db.query(
-        `DELETE FROM program_roll_events WHERE id = ANY($1::int[])`,
-        [idsToDelete]
-      );
-    }
-
     if (ev.type === 'Commit') {
-      // Validate percents for commit edits
+      // For commits, the odds string is the canonical source of truth for the
+      // school list — the per-row `school` column may not even be populated,
+      // and many imports put a single row with the full multi-school odds
+      // string. Deleting rows whose school column doesn't match the editor
+      // payload destroys the event. Instead: keep every row, just rewrite
+      // the odds string everywhere. Removed schools simply no longer appear
+      // in the new string, so the parser drops them on next render.
       for (const s of incoming) {
         if (s.percent == null || Number.isNaN(s.percent) || s.percent < 0) {
           throw error(400, `Percent for "${s.school}" is invalid.`);
         }
       }
       const oddsString = buildOddsString(incoming);
-      if (idsToKeep.length > 0) {
+      const allIds = ev.rows.map(r => r.id);
+      if (allIds.length > 0) {
         await db.query(
           `UPDATE program_roll_events
               SET odds = $1, updated_at = NOW()
             WHERE id = ANY($2::int[])`,
-          [oddsString, idsToKeep]
+          [oddsString, allIds]
+        );
+      }
+    } else {
+      // Steal / Auto-Commit: schools come from per-row school columns, so
+      // removing a school means deleting that row.
+      const keptLower = new Set(incoming.map(s => s.school.toLowerCase()));
+      const idsToDelete = ev.rows
+        .filter(r => !keptLower.has((r.school ?? '').trim().toLowerCase()))
+        .map(r => r.id);
+      if (idsToDelete.length > 0) {
+        await db.query(
+          `DELETE FROM program_roll_events WHERE id = ANY($1::int[])`,
+          [idsToDelete]
         );
       }
     }

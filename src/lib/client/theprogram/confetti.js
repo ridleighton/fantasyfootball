@@ -122,7 +122,7 @@ export function createConfettiBurst(canvas, opts = {}) {
         ctx.shadowColor = p.color;
       }
 
-      if (p.shape === 'helmet' && helmetCanvas) {
+      if (p.shape === 'helmet' && helmetCanvas && helmetCanvas.width > 0 && helmetCanvas.height > 0) {
         ctx.drawImage(helmetCanvas, -p.w / 2, -p.w / 2, p.w, p.w);
       } else {
         ctx.fillStyle = p.color;

@@ -308,11 +308,21 @@
     glowPrimary = winnerSchool?.colors?.primary ?? '#D9A441';
     glowSecondary = winnerSchool?.colors?.secondary ?? '#B8252C';
 
-    // Preload the winner helmet (CORS-stripped) in the background — we'll
-    // need it for the confetti burst by the time stop_glow ends.
-    const helmetPromise = winnerSchool?.helmet
-      ? preloadHelmetCanvas(winnerSchool.helmet)
-      : Promise.resolve(null);
+    // Preload a helmet for the confetti burst. Try the winning school first;
+    // fall back to the Placeholder Helmet so the burst always has helmet
+    // pieces (otherwise schools without an uploaded helmet would produce a
+    // helmet-less confetti, which reads as "broken").
+    const helmetPromise = (async () => {
+      if (winnerSchool?.helmet) {
+        const c = await preloadHelmetCanvas(winnerSchool.helmet);
+        if (c) return c;
+      }
+      if (data.placeholderHelmet) {
+        const c = await preloadHelmetCanvas(data.placeholderHelmet);
+        if (c) return c;
+      }
+      return null;
+    })();
 
     upsetPhase = 'in';
     await wait(500);

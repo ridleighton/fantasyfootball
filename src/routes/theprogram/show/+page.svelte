@@ -1526,38 +1526,42 @@
     z-index: 5;
   }
   .rect-stamp-inner {
-    border: 5px solid currentColor;
-    padding: 12px 22px;
+    border: 8px solid currentColor;
+    outline: 2px solid currentColor;
+    outline-offset: 4px;
+    padding: 14px 28px;
     text-align: center;
     position: relative;
-    background: transparent;
-  }
-  .rect-stamp-inner::before {
-    content: '';
-    position: absolute;
-    inset: 5px;
-    border: 1.5px solid currentColor;
-    opacity: 0.35;
-    pointer-events: none;
+    background: rgba(244, 220, 160, 0.22);
+    box-shadow:
+      inset 0 0 0 3px currentColor,
+      0 4px 24px rgba(0, 0, 0, 0.45);
   }
   .rect-stamp .stamp-label {
     font-family: 'Bebas Neue', 'Oswald', sans-serif;
-    font-size: 3.4rem;
-    letter-spacing: 8px;
+    font-size: 4.8rem;
+    letter-spacing: 12px;
     line-height: 1;
     display: block;
     color: currentColor;
     text-transform: uppercase;
+    -webkit-text-stroke: 2px currentColor;
+    paint-order: stroke fill;
+    text-shadow:
+      3px  3px 0 currentColor,
+      -1px -1px 0 currentColor,
+      0 0 18px rgba(0, 0, 0, 0.2);
   }
   .rect-stamp .stamp-sub {
     font-family: 'Courier Prime', ui-monospace, monospace;
-    font-size: 0.65rem;
-    letter-spacing: 3px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 4px;
     display: block;
-    margin-top: 6px;
-    border-top: 1.5px solid currentColor;
-    padding-top: 5px;
-    opacity: 0.65;
+    margin-top: 8px;
+    border-top: 3px solid currentColor;
+    padding-top: 6px;
+    opacity: 0.85;
     color: currentColor;
     text-transform: uppercase;
   }

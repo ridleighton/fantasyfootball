@@ -1518,8 +1518,11 @@
      ============================================================ */
   .rect-stamp {
     --stamp-ink: #111111;
-    --rot: 7deg;
+    --rot: -7deg;
     position: absolute;
+    top: 58%;
+    right: -60px;
+    transform: translateY(-50%) rotate(-7deg);
     color: var(--stamp-ink);
     opacity: 0;
     pointer-events: none;
@@ -1565,15 +1568,14 @@
     color: currentColor;
     text-transform: uppercase;
   }
-  /* Variant on player name: overlay the right third */
-  .rect-stamp.player-stamp {
-    top: 50%;
-    left: 66%;
-    transform: translate(-30%, -50%) rotate(var(--rot));
-  }
-  /* Variant on a school card: centered, sized down */
+  /* Variant on player name: uses the base positioning
+     (top: 58%, right: -60px, rotate(-7deg)) — overhangs the right edge. */
+  .rect-stamp.player-stamp { /* inherits base */ }
+  /* Variant on a school card: centered, sized down. Overrides the
+     right-anchored base so it sits on top of the helmet. */
   .rect-stamp.card-stamp {
     top: 50%;
+    right: auto;
     left: 50%;
     transform: translate(-50%, -50%) rotate(var(--rot));
   }
@@ -1582,23 +1584,25 @@
   .rect-stamp.card-stamp .stamp-sub  { font-size: 0.45rem; letter-spacing: 1.5px; margin-top: 3px; padding-top: 3px; }
 
   /* Drop-in animation. Keyframes use var(--rot) so the resting angle is
-     always preserved regardless of scale phase. */
+     always preserved regardless of scale phase. Player-stamp variant is
+     anchored via right: -60px / top: 58% so only vertical centering is
+     needed via translateY(-50%). */
   @keyframes stampDown {
     0% {
-      transform: translate(-30%, -50%) scale(2.8) rotate(var(--rot));
+      transform: translateY(-50%) scale(2.8) rotate(var(--rot));
       opacity: 0;
       filter: blur(6px);
     }
     55% {
-      transform: translate(-30%, -50%) scale(0.90) rotate(var(--rot));
+      transform: translateY(-50%) scale(0.90) rotate(var(--rot));
       opacity: 1;
       filter: blur(0);
     }
     72% {
-      transform: translate(-30%, -50%) scale(1.06) rotate(var(--rot));
+      transform: translateY(-50%) scale(1.06) rotate(var(--rot));
     }
     100% {
-      transform: translate(-30%, -50%) scale(1) rotate(var(--rot));
+      transform: translateY(-50%) scale(1) rotate(var(--rot));
       opacity: 1;
     }
   }

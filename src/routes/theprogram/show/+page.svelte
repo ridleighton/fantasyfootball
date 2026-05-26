@@ -881,7 +881,13 @@
          only called from inside the {:else if currentEvent} branch where
          all those are valid. -->
     {#snippet schoolCard(s)}
-      {@const isAcBidder = currentEvent.kind === 'auto' && acBiddersLower.has(s.school.toLowerCase())}
+      <!-- isAcBidder is gated on acPhase !== 'off' so the gold-ring
+           treatment only appears once "Reveal Auto-Commits" has been
+           pressed. Before that, bidder cards look like any other school
+           — no hint of who's about to win. -->
+      {@const isAcBidder = currentEvent.kind === 'auto'
+        && acPhase !== 'off'
+        && acBiddersLower.has(s.school.toLowerCase())}
       {@const acFading = currentEvent.kind === 'auto' && acPhase === 'fading' && !isAcBidder}
       {@const acHidden = currentEvent.kind === 'auto' && acPhase === 'solo_done' && !isAcBidder}
       <!-- Steal reveal cosmetics: only attached to the LOCKED outcome

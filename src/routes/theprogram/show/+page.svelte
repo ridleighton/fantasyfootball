@@ -77,11 +77,7 @@
   let rollState = $state('idle'); // 'idle' | 'spinning' | 'exploding' | 'revealed'
   let rollWinner = $state(null);
   let rollOutcome = $state(null);
-  let rollCameLate = $state(false);
   let rollError = $state('');
-  // Sub-phase of 'spinning' — 'fast' is the normal high-rpm spin, 'slow' is
-  // the deceleration + pulse before a long-shot commit explodes.
-  let spinPhase = $state('fast');
   // Colors for the spinner glow on the slow phase + confetti burst. Defaults
   // to the brand tokens if the winning school has no extracted colors yet.
   let glowPrimary = $state('#D9A441');
@@ -200,15 +196,12 @@
     rollState = 'idle';
     rollWinner = null;
     rollOutcome = null;
-    rollCameLate = false;
     rollError = '';
-    spinPhase = 'fast';
     upsetPhase = 'off';
     darkenOpacity = 0;
     acPhase = 'off';
     acMegaphonesBySchool = {};
     lockedDropValues = {};
-    lockedAnimDone = false;
     stopSpinLoop();
     spinRotation = 0;
     spinSpeed = 0;
@@ -282,6 +275,14 @@
     if (!currentEvent || rollState !== 'idle') return;
     rollError = '';
 
+    // Clear any prior confetti burst that's still ticking — happens when a
+    // contested auto-commit re-rolls, or any event is rolled twice in the
+    // same session after an edit.
+    if (confettiController) {
+      confettiController.stop();
+      confettiController = null;
+    }
+
     const skipSpinner =
       opts.instant === true ||
       isSolo(currentEvent) ||
@@ -289,7 +290,6 @@
 
     if (!skipSpinner) {
       rollState = 'spinning';
-      spinPhase = 'fast';
     }
     const startedAt = Date.now();
 
@@ -311,7 +311,6 @@
     if (skipSpinner) {
       rollWinner = serverResult.winner;
       rollOutcome = serverResult.outcome;
-      rollCameLate = !!serverResult.cameLate;
       rollState = 'revealed';
       return;
     }
@@ -334,7 +333,6 @@
         // Sole bidder — straight to the winner reveal.
         rollWinner = serverResult.winner;
         rollOutcome = serverResult.outcome;
-        rollCameLate = false;
         acPhase = 'solo_done';
         rollState = 'revealed';
       } else {
@@ -362,7 +360,6 @@
       if (remaining > 0) await wait(remaining);
       rollWinner = serverResult.winner;
       rollOutcome = serverResult.outcome;
-      rollCameLate = !!serverResult.cameLate;
       rollState = 'revealed';
       return;
     }
@@ -415,6 +412,8 @@
 
     upsetPhase = 'confetti';
     if (confettiCanvas) {
+      // Stop any prior burst (e.g. a back-to-back upset) before starting the new one.
+      if (confettiController) confettiController.stop();
       confettiController = createConfettiBurst(confettiCanvas, {
         primary: glowPrimary,
         secondary: glowSecondary,
@@ -432,15 +431,18 @@
     upsetPhase = 'off';
     rollWinner = serverResult.winner;
     rollOutcome = serverResult.outcome;
-    rollCameLate = !!serverResult.cameLate;
     rollState = 'revealed';
   }
 
-  // Auto-reveal solo events (commit / auto-commit with one school)
+  // Auto-reveal solo events (commit with one school). Don't fire while the
+  // edit modal is open — opening the modal on a solo-commit event would
+  // otherwise persist a roll result mid-edit, leaving the CSV with a winner
+  // derived from pre-edit odds.
   $effect(() => {
     if (!currentEvent) return;
     if (rollState !== 'idle') return;
     if (currentEvent.savedResult) return; // already done
+    if (editOpen) return;
     if (!isSolo(currentEvent)) return;
     performRoll({ instant: true });
   });
@@ -455,7 +457,6 @@
     await wait(3200 + Math.random() * 1200);
     rollWinner = pendingAcWinner;
     rollOutcome = pendingAcOutcome;
-    rollCameLate = false;
     acPhase = 'phase2_done';
     rollState = 'revealed';
     pendingAcWinner = null;
@@ -554,14 +555,10 @@
 
   // ---------- Steal helpers ----------
   function isStealSuccess() {
-    if (!currentEvent || currentEvent.kind !== 'steal') return false;
-    if (!rollWinner) return false;
-    if (rollOutcome === 'steal_failed_locked' || rollOutcome === 'steal_failed_stayed') return false;
-    return rollOutcome === 'steal_succeeded' || rollOutcome === 'steal_succeeded_late';
-  }
-  function isStealFailedNotLocked() {
     return currentEvent?.kind === 'steal'
-      && (rollOutcome === 'steal_failed_stayed');
+      && rollState === 'revealed'
+      && !!rollWinner
+      && rollOutcome === 'steal_succeeded';
   }
   function isLockedReveal() {
     return currentEvent?.kind === 'steal'
@@ -576,9 +573,8 @@
       && (rollOutcome === 'steal_failed_stayed' || rollOutcome === 'steal_no_real_attempt');
   }
 
-  // ---------- Locked-reveal odds drop animation ----------
+  // ---------- Locked / stayed reveal: odds drop animation ----------
   let lockedDropValues = $state({});
-  let lockedAnimDone = $state(false);
 
   function startLockedAnimation() {
     if (!currentEvent?.display?.schools) return;
@@ -587,7 +583,6 @@
       if (!s.isCommitted) startValues[s.school] = Number(s.normalized ?? 0);
     }
     lockedDropValues = { ...startValues };
-    lockedAnimDone = false;
 
     const start = performance.now();
     const duration = 1400;
@@ -598,7 +593,6 @@
       for (const k in startValues) next[k] = startValues[k] * (1 - eased);
       lockedDropValues = next;
       if (t < 1) requestAnimationFrame(step);
-      else lockedAnimDone = true;
     }
     requestAnimationFrame(step);
   }
@@ -807,7 +801,7 @@
          Auto-commit Phase 2 (contested) renders a different markup further below. -->
     {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading' || acPhase === 'solo_done')}
       {@const inPostStealReveal = isLockedReveal() || isStealStayed()}
-      <div class="schools" class:schools-locked={isLockedReveal()} class:schools-stayed={isStealStayed()}>
+      <div class="schools" class:schools-locked={isLockedReveal()}>
         {#each currentEvent.display.schools as s}
           {@const showBars = inPostStealReveal && !s.isCommitted && data.barsImage}
           {@const showLockSlap = isLockedReveal() && s.isCommitted}
@@ -820,8 +814,6 @@
             class="school-card"
             class:ineligible={s.eligible === false}
             class:committed={currentEvent.kind === 'steal' && s.isCommitted}
-            class:locked-active={isLockedReveal()}
-            class:stayed-active={isStealStayed()}
             class:ac-bidder={isAcBidder}
             class:ac-fading={acFading}
             class:ac-hidden={acHidden}
@@ -1869,9 +1861,8 @@
     margin: 32px 0 64px;
     animation: reveal-in 0.4s ease-out;
   }
-  /* Locked steal needs even more breathing room since the slap sits on the
-     locked card directly (no winner-name spacer below). */
-  .reveal-stage.locked .locked-wrap { margin-bottom: 32px; }
+  /* (locked-wrap rule retired — the locked reveal renders inside the schools
+     grid now, not as a separate winner-card.) */
   @keyframes reveal-in {
     from { opacity: 0; transform: scale(0.92); }
     to { opacity: 1; transform: scale(1); }

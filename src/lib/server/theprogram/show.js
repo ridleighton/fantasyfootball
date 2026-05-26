@@ -237,12 +237,20 @@ export function computeAutoCommit(group) {
   const autoCommitSchools = [...acSet];
 
   // Ensure every bidder shows up as a card even if they weren't in the
-  // parsed odds pool (or were dropped below the threshold).
+  // parsed odds pool (or were dropped below the threshold). Tag them with
+  // `isAcBidderOnly: true` so the UI can render them as eligible bidders
+  // rather than "below cut" — auto-commit overrides eligibility per the spec.
   const list = [...schools];
   const listLower = new Set(list.map(s => s.school.toLowerCase()));
   for (const ac of autoCommitSchools) {
     if (!listLower.has(ac.toLowerCase())) {
-      list.push({ school: ac, raw: 0, eligible: false, normalized: 0 });
+      list.push({
+        school: ac,
+        raw: 0,
+        normalized: 0,
+        eligible: true,
+        isAcBidderOnly: true
+      });
     }
   }
 

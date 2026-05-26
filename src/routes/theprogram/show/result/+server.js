@@ -61,8 +61,7 @@ export async function POST({ request }) {
 
     return json({
       outcome: result.outcome,
-      winner: result.winner,
-      cameLate: !!result.cameLate
+      winner: result.winner
     });
   } finally {
     await db.end();

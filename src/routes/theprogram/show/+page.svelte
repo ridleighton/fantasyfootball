@@ -823,7 +823,14 @@
       <div class="player-wrap">
         <h1 class="event-player tp-stamped-cream">{currentEvent.player}</h1>
         {#if isStealSuccess()}
-          <div class="rect-stamp player-stamp" use:stampIn={{ thudTarget: '.player-wrap' }} aria-label="Stolen">
+          <!-- Stamp lands at 3s, synced with the stealer slam (--stamp-delay).
+               The stealer card hits at the same instant the stamp lands. -->
+          <div
+            class="rect-stamp player-stamp"
+            style:--stamp-delay="3s"
+            use:stampIn={{ thudTarget: '.player-wrap' }}
+            aria-label="Stolen"
+          >
             <div class="rect-stamp-inner">
               <span class="stamp-label">Stolen</span>
               <span class="stamp-sub">Tampering Confirmed</span>
@@ -1002,13 +1009,18 @@
         {@const committedSchool = currentEvent.display.schools.find(s => s.isCommitted)}
         {@const committedHelmet = committedSchool?.helmet ?? currentEvent.display.committedSchoolHelmet}
         {@const committedName = committedSchool?.school ?? currentEvent.display.committedSchool ?? ''}
-        <!-- Stolen reveal: committed card visible alone (no banner, no
-             "Committed To" treatment), then stealer card slams on top. The
-             stealer's name is displayed beneath the stack from t=0 — never
-             the committed school's name. -->
+        <!-- Stolen reveal — three beats, scoped via CSS animation delays:
+             1) t=0 → 3s: "Currently Committed To" tag + helmet + committed
+                school name fade in, then sit visible during the 3s hold.
+             2) t=3s: the committed treatment fades out at the SAME instant
+                that (a) the stealer card slams on top, (b) the STOLEN
+                stamp lands on the player name, and (c) the stealer's
+                school name fades in beneath the stack.
+             3) t=4s: the "{Player} has been stolen by {Stealer} from
+                {Committed}" message fades in. -->
         <div class="reveal-stage steal-success">
           <div class="stolen-stack">
-            <div class="winner-card committed-base bare">
+            <div class="winner-card committed-base">
               {#if committedHelmet}
                 <img src={committedHelmet} alt={committedName} class="winner-img" referrerpolicy="no-referrer" />
               {:else}
@@ -1022,8 +1034,15 @@
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
+            <!-- "Currently Committed To" tag + committed school name — sit
+                 outside the inner cards so the slamming card can't trap
+                 them in a stacking context. Fade out exactly at the slam. -->
+            <div class="committed-tag">Currently Committed To</div>
+            {#if committedName}
+              <div class="committed-name">{committedName}</div>
+            {/if}
           </div>
-          <div class="winner-name tp-stamped-cream">{rollWinner}</div>
+          <div class="winner-name tp-stamped-cream stealer-name-in">{rollWinner}</div>
           <div class="steal-message stolen">
             <strong>{currentEvent.player}</strong> has been stolen by
             <strong>{rollWinner}</strong> from
@@ -1710,11 +1729,14 @@
       opacity: 1;
     }
   }
+  /* The animation delay is configurable per usage via --stamp-delay, so
+     the stolen variant can wait for the stealer slam (3s) without
+     affecting stayed-loyal / locked stamps. */
   .rect-stamp.player-stamp.animate {
-    animation: stampDown 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: stampDown 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--stamp-delay, 0s) forwards;
   }
   .rect-stamp.card-stamp.animate {
-    animation: stampDownCenter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: stampDownCenter 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--stamp-delay, 0s) forwards;
   }
 
   /* "Now you're interested?" pre-roll tag on late-joiner school cards */
@@ -2076,7 +2098,7 @@
   /* Lands ~0.5s after each outcome's stamp settles. */
   .steal-message.locked  { animation-delay: 1.2s; }
   .steal-message.stayed  { animation-delay: 2.0s; }
-  .steal-message.stolen  { animation-delay: 4.5s; }
+  .steal-message.stolen  { animation-delay: 4.2s; }
   .steal-message strong {
     font-style: normal;
     font-family: var(--tp-display-condensed);
@@ -2201,13 +2223,71 @@
     margin: 0;
     transform: none;
   }
-  /* Stolen reveal: the committed school card is just a plain cream card
-     during the 3-second hold — no gold border/glow, no "Committed To"
-     tag, no school-name label. The visible label below the stack is the
-     stealing school's name from t=0. */
+  /* Stolen reveal: during the 3-second hold the committed school card
+     gets the gold "currently committed" glow + a "Currently Committed
+     To" tag + the committed school name below. All three fade out at
+     exactly the slam instant (3s), at the same time the stealer card
+     lands, the STOLEN stamp drops on the player name, and the
+     stealer's school name fades in beneath the stack. */
   .stolen-stack .committed-base {
     z-index: 1;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    border-color: var(--tp-gold);
+    box-shadow: 0 0 0 3px var(--tp-gold), 0 8px 30px rgba(0, 0, 0, 0.45);
+    animation: committed-card-fade-out 0.3s ease 3s both;
+  }
+  @keyframes committed-card-fade-out {
+    /* Just drops the gold glow back to plain; the helmet itself stays
+       visible underneath the stealer card. */
+    from { box-shadow: 0 0 0 3px var(--tp-gold), 0 8px 30px rgba(0, 0, 0, 0.45); }
+    to   { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
+  }
+  .stolen-stack .committed-tag {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--tp-gold);
+    color: var(--tp-navy-dark);
+    padding: 4px 12px;
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    white-space: nowrap;
+    box-shadow: 0 2px 0 var(--tp-gold-2);
+    z-index: 5;
+    animation: committed-fade-out 0.3s ease 3s both;
+  }
+  .stolen-stack .committed-name {
+    position: absolute;
+    bottom: -38px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--tp-display-condensed);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tp-cream);
+    white-space: nowrap;
+    text-shadow: 0 2px 0 var(--tp-navy-dark);
+    z-index: 5;
+    animation: committed-fade-out 0.3s ease 3s both;
+  }
+  @keyframes committed-fade-out {
+    from { opacity: 1; transform: translateX(-50%) translateY(0); }
+    to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  }
+  /* Stealer school name fades in at the same moment the slam lands and
+     the STOLEN stamp drops (t=3s). */
+  .reveal-stage.steal-success .winner-name.stealer-name-in {
+    animation: stealer-name-in 0.45s ease 3s both;
+  }
+  @keyframes stealer-name-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
   }
   .stolen-stack .stealer-slam {
     z-index: 4;

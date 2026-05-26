@@ -117,15 +117,17 @@
   let acMegaphonesBySchool = $state({}); // school → [{ dx, dy, delay, duration }]
 
   function spawnMegaphoneParticles() {
-    const n = 14;
+    // Doubled count + wider spread + longer per-particle duration for a
+    // more dramatic, slower burst.
+    const n = 30;
     return Array.from({ length: n }, (_, i) => {
-      const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.45;
-      const dist = 90 + Math.random() * 70;
+      const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.6;
+      const dist = 130 + Math.random() * 110;
       return {
         dx: Math.cos(angle) * dist,
         dy: Math.sin(angle) * dist,
-        delay: Math.random() * 180,
-        duration: 800 + Math.random() * 350
+        delay: Math.random() * 420,
+        duration: 1500 + Math.random() * 600
       };
     });
   }
@@ -451,10 +453,12 @@
     acMegaphonesBySchool = byS;
 
     acPhase = 'megaphone';
-    await wait(1200);
+    // Long-form burst — particles take 1.5-2.1s + up to 420ms stagger,
+    // so we hold the phase for ~2.6s before fading non-bidder cards.
+    await wait(2600);
 
     acPhase = 'fading';
-    await wait(600);
+    await wait(700);
 
     if (acSchools.length <= 1) {
       // Sole bidder — persist the result, then go to solo_done.
@@ -2144,20 +2148,26 @@
     position: absolute;
     top: 0;
     left: 0;
-    font-size: 40px;
+    font-size: 56px;
     line-height: 1;
     pointer-events: none;
     opacity: 0;
     transform: translate(-50%, -50%);
     animation:
-      megaphone-burst var(--m-duration, 1000ms) var(--m-delay, 0ms) ease-out forwards;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+      megaphone-burst var(--m-duration, 1600ms) var(--m-delay, 0ms) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
   }
   @keyframes megaphone-burst {
-    0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
-    20%  { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+    15%  { transform: translate(-50%, -50%) scale(1.45); opacity: 1; }
+    /* Hold visibility through most of the travel — fades out only in
+       the final 20% so the burst feels heavy and lingering. */
+    80%  {
+      transform: translate(calc(-50% + var(--m-dx) * 0.85), calc(-50% + var(--m-dy) * 0.85)) scale(0.85) rotate(28deg);
+      opacity: 0.95;
+    }
     100% {
-      transform: translate(calc(-50% + var(--m-dx)), calc(-50% + var(--m-dy))) scale(0.55) rotate(40deg);
+      transform: translate(calc(-50% + var(--m-dx)), calc(-50% + var(--m-dy))) scale(0.5) rotate(60deg);
       opacity: 0;
     }
   }

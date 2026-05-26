@@ -998,9 +998,19 @@
       </div>
     {/if}
 
-    <!-- Controls -->
+    <!-- Controls. Branch precedence matters:
+         1. Phase-2 ready (contested auto-commit) — show the second Roll
+            button even if a previous saved result exists, otherwise the
+            "Already rolled" branch would steal this state.
+         2. Already rolled (any other type) — saved-result note + Next.
+         3. Roll / Reveal Auto-Commits button (waiting on first click).
+         4. Final reveal — Next Recruit. -->
     <div class="controls">
-      {#if previouslyRolled && rollState === 'idle'}
+      {#if rollState === 'idle' && acPhase === 'phase2_ready'}
+        <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={performAcPhase2Roll}>
+          Roll
+        </button>
+      {:else if previouslyRolled && rollState === 'idle' && acPhase === 'off'}
         <div class="prev-note">
           Already rolled · saved result
           <b>{previouslyRolled === 'LOCKED' ? 'Locked' : previouslyRolled}</b>
@@ -1009,10 +1019,6 @@
           <button class="tp-pill" onclick={returnToList}>← Return to List</button>
           <button class="tp-pill tp-pill-gold" onclick={goToNextRecruit}>Next Recruit →</button>
         </div>
-      {:else if rollState === 'idle' && acPhase === 'phase2_ready'}
-        <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={performAcPhase2Roll}>
-          Roll
-        </button>
       {:else if rollState === 'idle' && acPhase === 'off'}
         {#if !isSolo(currentEvent)}
           <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>

@@ -115,10 +115,6 @@
   //   'phase2_done'   — contested winner revealed
   let acPhase = $state('off');
   let acMegaphonesBySchool = $state({}); // school → [{ dx, dy, delay, duration }]
-  // For contested auto-commits we already know the winner from the first
-  // server call — stash it until the second Roll click finishes its spin.
-  let pendingAcWinner = $state(null);
-  let pendingAcOutcome = $state(null);
 
   function spawnMegaphoneParticles() {
     const n = 14;
@@ -272,6 +268,15 @@
       confettiController = null;
     }
 
+    // Auto-commit takes a fundamentally different path — no spinner, and
+    // no server call up front. The Reveal button just plays the megaphone
+    // / fade animation that exposes who actually bid. Resolution happens
+    // either after the fade (solo bidder) or only after the commissioner
+    // clicks the Phase 2 Roll (contested bidders).
+    if (currentEvent.kind === 'auto') {
+      return performAutoCommitReveal();
+    }
+
     // Locked steals still run the normal spinner before revealing — the
     // commissioner doesn't know it's locked until after the spin lands.
     const skipSpinner =
@@ -302,38 +307,6 @@
       rollWinner = serverResult.winner;
       rollOutcome = serverResult.outcome;
       rollState = 'revealed';
-      return;
-    }
-
-    // ---- Auto-Commit flow ----
-    if (currentEvent.kind === 'auto') {
-      const acSchools = currentEvent.display.autoCommitSchools ?? [];
-      // Seed megaphone particles per bidder card.
-      const byS = {};
-      for (const s of acSchools) byS[s] = spawnMegaphoneParticles();
-      acMegaphonesBySchool = byS;
-
-      acPhase = 'megaphone';
-      await wait(1200);
-
-      acPhase = 'fading';
-      await wait(600);
-
-      if (acSchools.length <= 1) {
-        // Sole bidder — straight to the winner reveal.
-        rollWinner = serverResult.winner;
-        rollOutcome = serverResult.outcome;
-        acPhase = 'solo_done';
-        rollState = 'revealed';
-      } else {
-        // Contested — stash the server's winner and wait for the Roll click.
-        pendingAcWinner = serverResult.winner;
-        pendingAcOutcome = serverResult.outcome;
-        acPhase = 'phase2_ready';
-        // Drop rollState back to idle so the schools markup re-renders with
-        // the phase-2 layout (equalized odds + second Roll button).
-        rollState = 'idle';
-      }
       return;
     }
 
@@ -439,18 +412,82 @@
 
   // Contested auto-commit second roll. The server already determined the
   // winner during the first Roll click — the spin here is ceremonial.
+  // Auto-commit reveal — runs the megaphone + fade animations without
+  // touching the server. After the fade settles:
+  //   - solo bidder: call server once to persist the sole-winner result
+  //   - contested:  drop to phase2_ready and wait for the Roll button click
+  async function performAutoCommitReveal() {
+    const acSchools = currentEvent.display.autoCommitSchools ?? [];
+
+    // Seed megaphone particles per bidder card.
+    const byS = {};
+    for (const s of acSchools) byS[s] = spawnMegaphoneParticles();
+    acMegaphonesBySchool = byS;
+
+    acPhase = 'megaphone';
+    await wait(1200);
+
+    acPhase = 'fading';
+    await wait(600);
+
+    if (acSchools.length <= 1) {
+      // Sole bidder — persist the result, then go to solo_done.
+      let serverResult;
+      try {
+        const res = await fetch('/theprogram/show/result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventIndex: currentEvent.globalIndex })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        serverResult = await res.json();
+      } catch (e) {
+        rollError = e.message;
+        acPhase = 'off';
+        return;
+      }
+      rollWinner = serverResult.winner;
+      rollOutcome = serverResult.outcome;
+      acPhase = 'solo_done';
+      rollState = 'revealed';
+    } else {
+      // Contested — wait for the commissioner to click Roll. No server
+      // call yet; the actual contested roll happens in
+      // performAcPhase2Roll().
+      acPhase = 'phase2_ready';
+      rollState = 'idle';
+    }
+  }
+
+  // Contested second roll — fires only when the commissioner clicks Roll
+  // on the phase 2 grid. This is where the actual contested draw happens.
   async function performAcPhase2Roll() {
     if (acPhase !== 'phase2_ready') return;
     acPhase = 'phase2_spin';
     rollState = 'spinning';
     spinSpeed = REGULAR_SPIN_SPEED;
+
+    let serverResult;
+    try {
+      const res = await fetch('/theprogram/show/result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventIndex: currentEvent.globalIndex })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      serverResult = await res.json();
+    } catch (e) {
+      rollError = e.message;
+      acPhase = 'phase2_ready';
+      rollState = 'idle';
+      return;
+    }
+
     await wait(3200 + Math.random() * 1200);
-    rollWinner = pendingAcWinner;
-    rollOutcome = pendingAcOutcome;
+    rollWinner = serverResult.winner;
+    rollOutcome = serverResult.outcome;
     acPhase = 'phase2_done';
     rollState = 'revealed';
-    pendingAcWinner = null;
-    pendingAcOutcome = null;
   }
 
   const isAcPhase2 = $derived(
@@ -461,6 +498,19 @@
   const acBiddersLower = $derived(
     new Set((currentEvent?.display?.autoCommitSchools ?? []).map(s => s.toLowerCase()))
   );
+
+  // Auto-commit winner's effective odds for the winner-card pct display:
+  //   - sole bidder: won at 100% (no contested roll)
+  //   - contested:   won an equalized 1/N draw among the bidders
+  const acWinnerPct = $derived.by(() => {
+    if (!currentEvent || currentEvent.kind !== 'auto') return null;
+    if (rollOutcome === 'auto_commit_solo_winner') return 100;
+    if (rollOutcome === 'auto_commit_contested') {
+      const n = (currentEvent.display.autoCommitSchools ?? []).length;
+      return n > 0 ? 100 / n : 100;
+    }
+    return null;
+  });
 
   // Phase-2 equalized schools — only the bidders, equal odds across them.
   const acPhase2Schools = $derived.by(() => {
@@ -878,8 +928,9 @@
     {/snippet}
 
     <!-- Schools display — shown pre-roll AND during locked / stayed reveals.
-         Auto-commit Phase 2 (contested) renders a simpler grid further below. -->
-    {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading' || acPhase === 'solo_done')}
+         Hidden once we reach the auto-commit solo_done state: the
+         post-roll winner card alone carries the result (no double helmet). -->
+    {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading')}
       <div class="schools" class:schools-locked={isLockedReveal()}>
         {#each currentEvent.display.schools as s (s.school)}
           {@render schoolCard(s)}
@@ -999,6 +1050,8 @@
             {rollWinner}
             {#if currentEvent.kind === 'commit' && winnerPct != null}
               <span class="winner-pct">{winnerPct.toFixed(1)}%</span>
+            {:else if currentEvent.kind === 'auto' && acWinnerPct != null}
+              <span class="winner-pct">{acWinnerPct.toFixed(1)}%</span>
             {/if}
           </div>
           {#if currentEvent.kind === 'auto' && acPhase === 'solo_done'}

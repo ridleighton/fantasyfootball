@@ -1060,15 +1060,21 @@
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
-            <!-- "Currently Committed To" tag + committed school name — sit
-                 outside the inner cards so the slamming card can't trap
-                 them in a stacking context. Fade out exactly at the slam. -->
+            <!-- "Currently Committed To" tag sits outside the inner cards
+                 so the slamming card can't trap it in a stacking context.
+                 Fades out at the slam (3s). -->
             <div class="committed-tag">Currently Committed To</div>
-            {#if committedName}
-              <div class="committed-name">{committedName}</div>
-            {/if}
           </div>
-          <div class="winner-name tp-stamped-cream stealer-name-in">{rollWinner}</div>
+          <!-- Single name slot. Both school names live in the same CSS
+               grid cell, so committed-name fades out and stealer-name
+               fades in at the same vertical position — no visual jump,
+               no double-row gap. -->
+          <div class="reveal-name-slot">
+            {#if committedName}
+              <div class="winner-name tp-stamped-cream committed-name-fade">{committedName}</div>
+            {/if}
+            <div class="winner-name tp-stamped-cream stealer-name-in">{rollWinner}</div>
+          </div>
           <div class="steal-message stolen">
             <strong>{currentEvent.player}</strong> has been stolen by
             <strong>{rollWinner}</strong> from
@@ -2272,23 +2278,28 @@
     max-width: 900px;
     margin: 0 auto;
   }
-  /* Stolen reveal: during the 3-second hold the committed school card
-     gets the gold "currently committed" glow + a "Currently Committed
-     To" tag + the committed school name below. All three fade out at
-     exactly the slam instant (3s), at the same time the stealer card
-     lands, the STOLEN stamp drops on the player name, and the
-     stealer's school name fades in beneath the stack. */
+  /* Stolen reveal: the committed school card gets the same gold-ring
+     treatment as the pre-roll school-card.committed (sharp drop shadow,
+     not a blurry one) so the "currently committed" state reads
+     identical to its pre-roll counterpart. Card fades back to plain
+     at the slam (3s). */
   .stolen-stack .committed-base {
     z-index: 1;
     border-color: var(--tp-gold);
-    box-shadow: 0 0 0 3px var(--tp-gold), 0 8px 30px rgba(0, 0, 0, 0.45);
+    box-shadow:
+      0 0 0 3px var(--tp-gold),
+      0 6px 0 rgba(0, 0, 0, 0.3);
     animation: committed-card-fade-out 0.3s ease 3s both;
   }
   @keyframes committed-card-fade-out {
-    /* Just drops the gold glow back to plain; the helmet itself stays
-       visible underneath the stealer card. */
-    from { box-shadow: 0 0 0 3px var(--tp-gold), 0 8px 30px rgba(0, 0, 0, 0.45); }
-    to   { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
+    from {
+      border-color: var(--tp-gold);
+      box-shadow: 0 0 0 3px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3);
+    }
+    to   {
+      border-color: var(--tp-navy-dark);
+      box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3);
+    }
   }
   .stolen-stack .committed-tag {
     position: absolute;
@@ -2307,35 +2318,41 @@
     white-space: nowrap;
     box-shadow: 0 2px 0 var(--tp-gold-2);
     z-index: 5;
-    animation: committed-fade-out 0.3s ease 3s both;
+    animation: committed-tag-fade-out 0.3s ease 3s both;
   }
-  .stolen-stack .committed-name {
-    position: absolute;
-    bottom: -38px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-family: var(--tp-display-condensed);
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tp-cream);
-    white-space: nowrap;
-    text-shadow: 0 2px 0 var(--tp-navy-dark);
-    z-index: 5;
-    animation: committed-fade-out 0.3s ease 3s both;
-  }
-  @keyframes committed-fade-out {
+  @keyframes committed-tag-fade-out {
     from { opacity: 1; transform: translateX(-50%) translateY(0); }
     to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
   }
-  /* Stealer school name fades in at the same moment the slam lands and
-     the STOLEN stamp drops (t=3s). */
-  .reveal-stage.steal-success .winner-name.stealer-name-in {
-    animation: stealer-name-in 0.45s ease 3s both;
+
+  /* Both school names share a single grid cell so the committed name
+     fades out and the stealer's name fades in at the *same* vertical
+     position — no double-row gap, no jump. */
+  .reveal-stage.steal-success .reveal-name-slot {
+    display: grid;
+    grid-template-areas: 'name';
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
   }
-  @keyframes stealer-name-in {
-    from { opacity: 0; transform: scale(0.92); }
+  .reveal-stage.steal-success .reveal-name-slot > .winner-name {
+    grid-area: name;
+    width: 100%;
+  }
+  .reveal-stage.steal-success .winner-name.committed-name-fade {
+    animation: name-fade-out 0.3s ease 3s both;
+  }
+  .reveal-stage.steal-success .winner-name.stealer-name-in {
+    /* Hidden until the slam — then fades in at the same instant the
+       committed name fades out. */
+    animation: name-fade-in 0.45s ease 3s both;
+  }
+  @keyframes name-fade-out {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(0.96); }
+  }
+  @keyframes name-fade-in {
+    from { opacity: 0; transform: scale(0.94); }
     to   { opacity: 1; transform: scale(1); }
   }
   .stolen-stack .stealer-slam {

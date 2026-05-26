@@ -5,9 +5,15 @@ import {
   loadEventsForWeek,
   computeCommit,
   computeSteal,
-  computeAutoCommit
+  computeAutoCommit,
+  formatOutcomeLabel
 } from '$lib/server/theprogram/show.js';
 
+// "Calculated Odds" is the live display percentages from the underlying
+// computeX helpers. Note: if `odds` is edited between roll time and export,
+// these percentages will reflect the *current* odds, not what was on screen
+// at roll time. Acceptable for now — would require persisting display_odds
+// at roll time to make it truly immutable.
 function calculatedOddsStr(group) {
   let schools;
   if (group.type === 'Commit') schools = computeCommit(group).schools;
@@ -20,36 +26,6 @@ function calculatedOddsStr(group) {
       return `${s.school}: ${n.toFixed(1)}%`;
     })
     .join(', ');
-}
-
-function outcomeFor(group) {
-  const winner = group.rows.find(r => r.result)?.result ?? null;
-  const committedSchool =
-    group.rows.find(r => (r.committed_school ?? '').trim())?.committed_school?.trim() ?? null;
-  const isLocked = group.rows.some(r => r.locked === true);
-  const schoolsSet = new Set(group.rows.map(r => (r.school ?? '').trim()).filter(Boolean));
-  const schoolCount = schoolsSet.size;
-
-  if (!winner) return '';
-
-  if (group.type === 'Commit') {
-    return `Committed to ${winner}`;
-  }
-  if (group.type === 'Steal') {
-    if (isLocked) return 'Steal failed — locked';
-    if (committedSchool && winner.toLowerCase() === committedSchool.toLowerCase()) {
-      return 'Steal failed — stayed loyal';
-    }
-    return `Steal succeeded — moved to ${winner}`;
-  }
-  if (group.type === 'Auto-Commit') {
-    // schoolCount here counts rows in the group = number of bidders.
-    if (schoolCount === 1) {
-      return `Auto-commit awarded to ${winner} — sole bidder`;
-    }
-    return `Auto-commit awarded to ${winner} — won contested roll`;
-  }
-  return '';
 }
 
 export async function GET() {
@@ -67,7 +43,9 @@ export async function GET() {
     const schools = [...new Set(ev.rows.map(r => (r.school ?? '').trim()).filter(Boolean))].join(', ');
     const odds = calculatedOddsStr(ev);
     const result = ev.rows.find(r => r.result)?.result ?? '';
-    const outcome = outcomeFor(ev);
+    const outcome = formatOutcomeLabel(ev);
+    // 'LOCKED' is a marker for "no roll happened" — blank in the Result
+    // column; the Outcome column carries the "Steal failed — locked" text.
     return [ev.conference, ev.type, ev.player, schools, odds, result === 'LOCKED' ? '' : result, outcome];
   });
 

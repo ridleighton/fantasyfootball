@@ -409,6 +409,45 @@ export function colorsForSchool(photos, schoolName) {
   return { primary: h.primary, secondary: h.secondary };
 }
 
+// ---------------- Outcome label ----------------
+// Builds the human-readable outcome string used by the CSV export.
+// Uses the same classification primitives as executeRoll
+// (computeSteal.locked, computeAutoCommit.autoCommitSchools) so the
+// label can't drift from the spinner UI's interpretation.
+//
+// Reads only persisted state — the saved result column on each row +
+// the row data itself — so it works at export time without needing
+// a fresh roll.
+export function formatOutcomeLabel(group) {
+  const winner = group.rows.find(r => r.result)?.result ?? null;
+  if (!winner) return '';
+
+  if (group.type === 'Commit') {
+    return `Committed to ${winner}`;
+  }
+
+  if (group.type === 'Steal') {
+    const data = computeSteal(group);
+    if (data.locked) return 'Steal failed — locked';
+    const committed = data.committedSchool;
+    if (committed && winner.toLowerCase() === committed.toLowerCase()) {
+      return 'Steal failed — stayed loyal';
+    }
+    return `Steal succeeded — moved to ${winner}`;
+  }
+
+  if (group.type === 'Auto-Commit') {
+    const data = computeAutoCommit(group);
+    const acCount = data.autoCommitSchools?.length ?? 0;
+    if (acCount <= 1) {
+      return `Auto-commit awarded to ${winner} — sole bidder`;
+    }
+    return `Auto-commit awarded to ${winner} — won contested roll`;
+  }
+
+  return '';
+}
+
 // ---------------- Shared loader ----------------
 // Fetches all roll-event rows for the week + the saved conference order in
 // one round trip, and returns the grouped events. Every endpoint that

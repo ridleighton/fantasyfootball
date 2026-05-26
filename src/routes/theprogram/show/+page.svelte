@@ -397,17 +397,43 @@
     rollState = 'revealed';
   }
 
-  // Auto-reveal solo events (commit with one school). Don't fire while the
-  // edit modal is open — opening the modal on a solo-commit event would
-  // otherwise persist a roll result mid-edit, leaving the CSV with a winner
-  // derived from pre-edit odds.
+  // Auto-reveal solo events (commit with one school at 100%).
+  //
+  // Optimistic reveal: we already know the winner client-side (the sole
+  // eligible school), so set the reveal state synchronously on mount and
+  // skip the server round-trip from the rendering path. The schools grid
+  // never gets a chance to mount, so there's no flash-then-swap when
+  // landing on a solo-commit event. The server is still called in the
+  // background to persist the result.
+  //
+  // Bails when the edit modal is open — otherwise opening the modal on a
+  // solo-commit event would persist a roll result mid-edit, leaving the
+  // CSV with a winner derived from pre-edit odds.
   $effect(() => {
     if (!currentEvent) return;
     if (rollState !== 'idle') return;
     if (currentEvent.savedResult) return; // already done
     if (editOpen) return;
     if (!isSolo(currentEvent)) return;
-    performRoll({ instant: true });
+
+    const schools = currentEvent.display.schools ?? [];
+    const eligible = schools.filter(s => s.eligible !== false);
+    const winner = (eligible[0] ?? schools[0])?.school;
+    if (!winner) return;
+
+    rollWinner = winner;
+    rollOutcome = currentEvent.kind === 'commit' ? 'commit_solo' : 'auto_commit_solo_winner';
+    rollState = 'revealed';
+
+    // Fire-and-forget — server returns the same deterministic winner via
+    // executeRoll's solo branch, so the on-screen reveal is already correct.
+    // If the request fails, the next page load will see no saved result
+    // and re-fire this effect.
+    fetch('/theprogram/show/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventIndex: currentEvent.globalIndex })
+    }).catch(() => { /* best-effort */ });
   });
 
   // Contested auto-commit second roll. The server already determined the

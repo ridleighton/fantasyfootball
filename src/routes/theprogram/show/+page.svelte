@@ -272,10 +272,11 @@
       confettiController = null;
     }
 
+    // Locked steals still run the normal spinner before revealing — the
+    // commissioner doesn't know it's locked until after the spin lands.
     const skipSpinner =
       opts.instant === true ||
-      isSolo(currentEvent) ||
-      (currentEvent.kind === 'steal' && currentEvent.display.locked);
+      isSolo(currentEvent);
 
     if (!skipSpinner) {
       rollState = 'spinning';
@@ -562,14 +563,19 @@
       && (rollOutcome === 'steal_failed_stayed' || rollOutcome === 'steal_no_real_attempt');
   }
 
-  // ---------- Locked / stayed reveal: odds drop animation ----------
+  // ---------- Locked reveal: odds animation ----------
+  // Locked outcome: every non-committed school's odds drop to 0, and the
+  // committed school's odds rise to 100. (Stayed-loyal does NOT trigger
+  // this — its display stays static per the spec.)
   let lockedDropValues = $state({});
 
   function startLockedAnimation() {
     if (!currentEvent?.display?.schools) return;
     const startValues = {};
+    const endValues = {};
     for (const s of currentEvent.display.schools) {
-      if (!s.isCommitted) startValues[s.school] = Number(s.normalized ?? 0);
+      startValues[s.school] = Number(s.normalized ?? 0);
+      endValues[s.school] = s.isCommitted ? 100 : 0;
     }
     lockedDropValues = { ...startValues };
 
@@ -579,7 +585,9 @@
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3);
       const next = {};
-      for (const k in startValues) next[k] = startValues[k] * (1 - eased);
+      for (const k in startValues) {
+        next[k] = startValues[k] + (endValues[k] - startValues[k]) * eased;
+      }
       lockedDropValues = next;
       if (t < 1) requestAnimationFrame(step);
     }
@@ -587,7 +595,7 @@
   }
 
   $effect(() => {
-    if (isLockedReveal() || isStealStayed()) startLockedAnimation();
+    if (isLockedReveal()) startLockedAnimation();
   });
 
   // ---------- Edit panel ----------
@@ -791,14 +799,18 @@
          only called from inside the {:else if currentEvent} branch where
          all those are valid. -->
     {#snippet schoolCard(s)}
-      {@const inPostStealReveal = isLockedReveal() || isStealStayed()}
       {@const isAcBidder = currentEvent.kind === 'auto' && acBiddersLower.has(s.school.toLowerCase())}
       {@const acFading = currentEvent.kind === 'auto' && acPhase === 'fading' && !isAcBidder}
       {@const acHidden = currentEvent.kind === 'auto' && acPhase === 'solo_done' && !isAcBidder}
-      {@const showBars = inPostStealReveal && !s.isCommitted && data.barsImage}
-      {@const showLockSlap = isLockedReveal() && s.isCommitted}
-      {@const dropping = inPostStealReveal && !s.isCommitted}
-      {@const showLateTag = inPostStealReveal && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
+      <!-- Steal reveal cosmetics: only attached to the LOCKED outcome
+           (bars + odds drop + LOCKED card stamp + late-joiner tag). The
+           stayed-loyal reveal keeps the schools view rendered as-is and
+           drives its messaging through the player-name stamp only. -->
+      {@const locked = isLockedReveal()}
+      {@const showBars = locked && !s.isCommitted && data.barsImage}
+      {@const showLockSlap = locked && s.isCommitted}
+      {@const dropping = locked}
+      {@const showLateTag = locked && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
       <div
         class="school-card"
         class:ineligible={s.eligible === false}
@@ -853,7 +865,11 @@
           {#if s.eligible === false}
             <span class="pct-bad">{(s.raw ?? 0).toFixed(1)}% · below cut</span>
           {:else if dropping}
-            <span class="pct-big dropping">{(lockedDropValues[s.school] ?? s.normalized ?? 0).toFixed(1)}<small>%</small></span>
+            <span
+              class="pct-big"
+              class:dropping={!s.isCommitted}
+              class:rising={s.isCommitted}
+            >{(lockedDropValues[s.school] ?? s.normalized ?? 0).toFixed(1)}<small>%</small></span>
           {:else}
             <span class="pct-big">{(s.normalized ?? 0).toFixed(1)}<small>%</small></span>
           {/if}
@@ -869,6 +885,25 @@
           {@render schoolCard(s)}
         {/each}
       </div>
+
+      <!-- Steal reveal messages — locked: school locks the prospect;
+           stayed: prospect stays loyal. Both render below the schools view
+           on their respective outcomes. -->
+      {#if isLockedReveal()}
+        {@const committedName = currentEvent.display.schools.find(s => s.isCommitted)?.school
+          ?? currentEvent.display.committedSchool ?? ''}
+        <div class="steal-message locked">
+          <strong>{committedName}</strong> has locked
+          <strong>{currentEvent.player}</strong> from being stolen.
+        </div>
+      {:else if isStealStayed()}
+        {@const committedName = currentEvent.display.schools.find(s => s.isCommitted)?.school
+          ?? currentEvent.display.committedSchool ?? ''}
+        <div class="steal-message stayed">
+          <strong>{currentEvent.player}</strong> has stayed loyal to
+          <strong>{committedName}</strong>.
+        </div>
+      {/if}
     {/if}
 
     <!-- Darken overlay — covers the theater backdrop during stop_glow.
@@ -916,10 +951,13 @@
         {@const committedSchool = currentEvent.display.schools.find(s => s.isCommitted)}
         {@const committedHelmet = committedSchool?.helmet ?? currentEvent.display.committedSchoolHelmet}
         {@const committedName = committedSchool?.school ?? currentEvent.display.committedSchool ?? ''}
-        <!-- Stolen reveal: committed card visible alone, then stealer card slams on top -->
+        <!-- Stolen reveal: committed card visible alone (no banner, no
+             "Committed To" treatment), then stealer card slams on top. The
+             stealer's name is displayed beneath the stack from t=0 — never
+             the committed school's name. -->
         <div class="reveal-stage steal-success">
           <div class="stolen-stack">
-            <div class="winner-card committed-base">
+            <div class="winner-card committed-base bare">
               {#if committedHelmet}
                 <img src={committedHelmet} alt={committedName} class="winner-img" referrerpolicy="no-referrer" />
               {:else}
@@ -933,14 +971,13 @@
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
-            <!-- Tag + committed school name sit on the stack so they aren't
-                 covered by the slamming card; they fade out as the slam lands. -->
-            <div class="committed-tag">Committed To</div>
-            {#if committedName}
-              <div class="committed-name">{committedName}</div>
-            {/if}
           </div>
           <div class="winner-name tp-stamped-cream">{rollWinner}</div>
+          <div class="steal-message stolen">
+            <strong>{currentEvent.player}</strong> has been stolen by
+            <strong>{rollWinner}</strong> from
+            <strong>{committedName}</strong>.
+          </div>
         </div>
       {:else if rollWinner}
         {@const winnerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
@@ -1963,6 +2000,42 @@
     color: var(--tp-oxblood);
     font-variant-numeric: tabular-nums;
   }
+  .pct-big.rising {
+    color: var(--tp-gold-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Steal outcome messages — locked / stayed loyal / stolen.
+     Renders below the schools grid (locked + stayed) or below the
+     stealer reveal (stolen). */
+  .steal-message {
+    max-width: 760px;
+    margin: 28px auto 0;
+    text-align: center;
+    font-family: var(--tp-body);
+    font-size: clamp(18px, 2.4vw, 26px);
+    color: var(--tp-cream);
+    font-style: italic;
+    text-shadow: 0 1px 0 var(--tp-navy-dark);
+    line-height: 1.4;
+    animation: steal-message-in 0.4s ease-out both;
+  }
+  /* Lands ~0.5s after each outcome's stamp settles. */
+  .steal-message.locked  { animation-delay: 1.2s; }
+  .steal-message.stayed  { animation-delay: 2.0s; }
+  .steal-message.stolen  { animation-delay: 4.5s; }
+  .steal-message strong {
+    font-style: normal;
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tp-gold-soft);
+  }
+  @keyframes steal-message-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 
   /* ============================================================
      Auto-Commit reveal flow
@@ -2051,12 +2124,20 @@
   }
 
   /* Stolen reveal — committed card visible, stealer slams on top */
+  /* Stolen reveal: force a column flex layout so the stack, winner-name,
+     and message are explicitly centered. Without this the inline-block
+     stack + block winner-name composition could read slightly off-center
+     depending on font-metric anomalies in the player-stamp area. */
+  .reveal-stage.steal-success {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
   .stolen-stack {
     position: relative;
-    display: inline-block;
     width: 320px;
     height: 320px;
-    margin-bottom: 48px;
+    margin: 0 auto 48px;
   }
   .stolen-stack .winner-card {
     position: absolute;
@@ -2064,50 +2145,13 @@
     margin: 0;
     transform: none;
   }
+  /* Stolen reveal: the committed school card is just a plain cream card
+     during the 3-second hold — no gold border/glow, no "Committed To"
+     tag, no school-name label. The visible label below the stack is the
+     stealing school's name from t=0. */
   .stolen-stack .committed-base {
     z-index: 1;
-    border-color: var(--tp-gold);
-    box-shadow: 0 0 0 3px var(--tp-gold), 0 8px 30px rgba(0, 0, 0, 0.45);
-  }
-  .committed-tag {
-    position: absolute;
-    top: -22px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--tp-gold);
-    color: var(--tp-navy-dark);
-    padding: 4px 12px;
-    font-family: var(--tp-display-condensed);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    border-radius: 2px;
-    white-space: nowrap;
-    box-shadow: 0 2px 0 var(--tp-gold-2);
-    z-index: 5;
-    /* Fades out just before the stealer card lands. */
-    animation: committed-fade-out 0.3s ease 2.85s both;
-  }
-  .committed-name {
-    position: absolute;
-    bottom: -38px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-family: var(--tp-display-condensed);
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tp-cream);
-    white-space: nowrap;
-    text-shadow: 0 2px 0 var(--tp-navy-dark);
-    z-index: 5;
-    animation: committed-fade-out 0.3s ease 2.85s both;
-  }
-  @keyframes committed-fade-out {
-    from { opacity: 1; transform: translateX(-50%) translateY(0); }
-    to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   }
   .stolen-stack .stealer-slam {
     z-index: 4;

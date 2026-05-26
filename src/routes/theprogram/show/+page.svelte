@@ -249,10 +249,10 @@
     if (!ev) return false;
     // Auto-commits no longer auto-trigger — they wait for the commissioner
     // to press "Reveal Auto-Commits".
+    // Steals always run the spinner — including the no-real-attempt case
+    // (every challenger was a late-joiner). The audience should still feel
+    // the moment before learning the recruit stayed put.
     if (ev.kind === 'commit' && ev.display.solo) return true;
-    // Outcome 4 — only late-joiners tried to steal. No roll needed; the
-    // post-roll Stayed-Loyal layout renders directly.
-    if (ev.kind === 'steal' && ev.display.noRealAttempt) return true;
     return false;
   }
 

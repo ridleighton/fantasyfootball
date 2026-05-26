@@ -654,9 +654,9 @@
       });
       if (!res.ok) throw new Error(await res.text() || 'Save failed');
       await invalidateAll();
-      // Defensive: re-assert the URL so we stay on the same event after
-      // the data shape shifts. Without this, the page sometimes flashed
-      // back to the launcher because $derived chains briefly went null.
+      // Re-assert the URL in case query params drifted. The launcher
+      // branch is gated by !editOpen && !editSaving above, so this is no
+      // longer compensating for a flash — just keeping URL state tidy.
       if (restoreConf && restoreIdx != null) {
         await goto(
           `/theprogram/show?conf=${encodeURIComponent(restoreConf)}&i=${restoreIdx}`,
@@ -1078,7 +1078,7 @@
       </div>
     {/if}
   </div>
-{:else if currentConf}
+{:else if currentConf && !editOpen && !editSaving}
   <!-- ============================ Conference Launcher ============================ -->
   <div class="launcher">
     <div class="theater-stripes" aria-hidden="true"></div>

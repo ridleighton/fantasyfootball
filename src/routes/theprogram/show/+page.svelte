@@ -849,11 +849,10 @@
       <div class="player-wrap">
         <h1 class="event-player tp-stamped-cream">{currentEvent.player}</h1>
         {#if isStealSuccess()}
-          <!-- Stamp lands at 3s, synced with the stealer slam (--stamp-delay).
-               The stealer card hits at the same instant the stamp lands. -->
+          <!-- STOLEN stamp lands shortly after the stealer card fades in. -->
           <div
             class="rect-stamp player-stamp"
-            style:--stamp-delay="3s"
+            style:--stamp-delay="0.5s"
             use:stampIn={{ thudTarget: '.player-wrap' }}
             aria-label="Stolen"
           >
@@ -1033,48 +1032,26 @@
         {@const stealerSchool = currentEvent.display.schools.find(s => s.school?.toLowerCase() === rollWinner?.toLowerCase())}
         {@const stealerHelmet = stealerSchool?.helmet}
         {@const committedSchool = currentEvent.display.schools.find(s => s.isCommitted)}
-        {@const committedHelmet = committedSchool?.helmet ?? currentEvent.display.committedSchoolHelmet}
         {@const committedName = committedSchool?.school ?? currentEvent.display.committedSchool ?? ''}
-        <!-- Stolen reveal — three beats, scoped via CSS animation delays:
-             1) t=0 → 3s: "Currently Committed To" tag + helmet + committed
-                school name fade in, then sit visible during the 3s hold.
-             2) t=3s: the committed treatment fades out at the SAME instant
-                that (a) the stealer card slams on top, (b) the STOLEN
-                stamp lands on the player name, and (c) the stealer's
-                school name fades in beneath the stack.
-             3) t=4s: the "{Player} has been stolen by {Stealer} from
-                {Committed}" message fades in. -->
+        <!-- Stolen reveal — simple, one-beat:
+             1) Stealer's winner card + name appear (via .reveal-stage's
+                fade-in)
+             2) STOLEN stamp lands on the player name at 0.5s
+             3) "{Player} has been stolen by {Stealer} from {Committed}"
+                message fades in at 1.5s
+             The committed school is no longer shown post-roll. -->
         <div class="reveal-stage steal-success">
-          <div class="stolen-stack">
-            <div class="winner-card committed-base">
-              {#if committedHelmet}
-                <img src={committedHelmet} alt={committedName} class="winner-img" referrerpolicy="no-referrer" />
-              {:else}
-                <div class="winner-img helmet-placeholder">{committedName?.[0]?.toUpperCase() ?? '?'}</div>
-              {/if}
-            </div>
-            <div class="winner-card stealer-slam">
+          <div class="winner-card-wrap">
+            <div class="winner-card">
               {#if stealerHelmet}
                 <img src={stealerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
               {:else}
                 <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
-            <!-- "Currently Committed To" tag sits outside the inner cards
-                 so the slamming card can't trap it in a stacking context.
-                 Fades out at the slam (3s). -->
-            <div class="committed-tag">Currently Committed To</div>
+            <div class="winner-ring" aria-hidden="true"></div>
           </div>
-          <!-- Single name slot. Both school names live in the same CSS
-               grid cell, so committed-name fades out and stealer-name
-               fades in at the same vertical position — no visual jump,
-               no double-row gap. -->
-          <div class="reveal-name-slot">
-            {#if committedName}
-              <div class="winner-name tp-stamped-cream committed-name-fade">{committedName}</div>
-            {/if}
-            <div class="winner-name tp-stamped-cream stealer-name-in">{rollWinner}</div>
-          </div>
+          <div class="winner-name tp-stamped-cream">{rollWinner}</div>
           <div class="steal-message stolen">
             <strong>{currentEvent.player}</strong> has been stolen by
             <strong>{rollWinner}</strong> from
@@ -2130,7 +2107,7 @@
   /* Lands ~0.5s after each outcome's stamp settles. */
   .steal-message.locked  { animation-delay: 1.2s; }
   .steal-message.stayed  { animation-delay: 2.0s; }
-  .steal-message.stolen  { animation-delay: 4.2s; }
+  .steal-message.stolen  { animation-delay: 1.5s; }
   .steal-message strong {
     font-style: normal;
     font-family: var(--tp-display-condensed);
@@ -2233,137 +2210,19 @@
     text-shadow: 0 1px 0 var(--tp-navy-dark);
   }
 
-  /* Stolen reveal — committed card visible, stealer slams on top */
-  /* Stolen reveal: force a column flex layout so the stack, winner-name,
-     and message are explicitly centered. Without this the inline-block
-     stack + block winner-name composition could read slightly off-center
-     depending on font-metric anomalies in the player-stamp area. */
-  /* Steal-success reveal: explicit centering at every layer.
-     - The reveal-stage is a column flex with align-items: center to
-       horizontally center each child (stack, name, message).
-     - The stolen-stack is a fixed 320x320 block centered via the flex
-       container — auto horizontal margins removed because they
-       interact unpredictably with align-items: center in column flex.
-     - .winner-name forced to width 100% so its inner justify-content
-       has the full row to center within (otherwise it sizes to text
-       content and centering can read as left-leaning for short names
-       compared to the wider stack above).
-     - .steal-message keeps its max-width: 760px + margin auto for
-       symmetric centering. */
+  /* Steal-success reveal: just the stealer's winner card + name + message.
+     Centering enforced via column flex so children align cleanly with
+     the player-name area above. */
   .reveal-stage.steal-success {
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
   }
-  .stolen-stack {
-    position: relative;
-    width: 320px;
-    height: 320px;
-    margin: 0 0 48px;
-    flex-shrink: 0;
-  }
-  .stolen-stack .winner-card {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    transform: none;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-  }
   .reveal-stage.steal-success .winner-name {
     width: 100%;
     max-width: 900px;
     margin: 0 auto;
-  }
-  /* Stolen reveal: the committed school card gets the same gold-ring
-     treatment as the pre-roll school-card.committed (sharp drop shadow,
-     not a blurry one) so the "currently committed" state reads
-     identical to its pre-roll counterpart. Card fades back to plain
-     at the slam (3s). */
-  .stolen-stack .committed-base {
-    z-index: 1;
-    border-color: var(--tp-gold);
-    box-shadow:
-      0 0 0 3px var(--tp-gold),
-      0 6px 0 rgba(0, 0, 0, 0.3);
-    animation: committed-card-fade-out 0.3s ease 3s both;
-  }
-  @keyframes committed-card-fade-out {
-    from {
-      border-color: var(--tp-gold);
-      box-shadow: 0 0 0 3px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3);
-    }
-    to   {
-      border-color: var(--tp-navy-dark);
-      box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3);
-    }
-  }
-  .stolen-stack .committed-tag {
-    position: absolute;
-    top: -22px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--tp-gold);
-    color: var(--tp-navy-dark);
-    padding: 4px 12px;
-    font-family: var(--tp-display-condensed);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    border-radius: 2px;
-    white-space: nowrap;
-    box-shadow: 0 2px 0 var(--tp-gold-2);
-    z-index: 5;
-    animation: committed-tag-fade-out 0.3s ease 3s both;
-  }
-  @keyframes committed-tag-fade-out {
-    from { opacity: 1; transform: translateX(-50%) translateY(0); }
-    to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
-  }
-
-  /* Both school names share a single grid cell so the committed name
-     fades out and the stealer's name fades in at the *same* vertical
-     position — no double-row gap, no jump. */
-  .reveal-stage.steal-success .reveal-name-slot {
-    display: grid;
-    grid-template-areas: 'name';
-    width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  .reveal-stage.steal-success .reveal-name-slot > .winner-name {
-    grid-area: name;
-    width: 100%;
-  }
-  .reveal-stage.steal-success .winner-name.committed-name-fade {
-    animation: name-fade-out 0.3s ease 3s both;
-  }
-  .reveal-stage.steal-success .winner-name.stealer-name-in {
-    /* Hidden until the slam — then fades in at the same instant the
-       committed name fades out. */
-    animation: name-fade-in 0.45s ease 3s both;
-  }
-  @keyframes name-fade-out {
-    from { opacity: 1; transform: scale(1); }
-    to   { opacity: 0; transform: scale(0.96); }
-  }
-  @keyframes name-fade-in {
-    from { opacity: 0; transform: scale(0.94); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-  .stolen-stack .stealer-slam {
-    z-index: 4;
-    /* Committed school sits alone for a full 3s, then the stealer slams. */
-    animation: stealer-slam 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 3s both;
-  }
-  @keyframes stealer-slam {
-    0%   { transform: translateY(-180vh) scale(1.6) rotate(-12deg); opacity: 0; }
-    70%  { transform: translateY(8px) scale(1.04) rotate(2deg); opacity: 1; }
-    100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
   }
   .quip {
     font-family: var(--tp-body);

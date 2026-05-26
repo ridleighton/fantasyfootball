@@ -786,79 +786,87 @@
       <div class="tp-alert tp-alert-error event-alert">{rollError}</div>
     {/if}
 
-    <!-- Schools display — shown pre-roll AND during locked / stayed reveals.
-         Auto-commit Phase 2 (contested) renders a different markup further below. -->
-    {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading' || acPhase === 'solo_done')}
+    <!-- Full school card. Reads currentEvent / acPhase / lockedDropValues
+         directly from the component's reactive state — this snippet is
+         only called from inside the {:else if currentEvent} branch where
+         all those are valid. -->
+    {#snippet schoolCard(s)}
       {@const inPostStealReveal = isLockedReveal() || isStealStayed()}
-      <div class="schools" class:schools-locked={isLockedReveal()}>
-        {#each currentEvent.display.schools as s}
-          {@const showBars = inPostStealReveal && !s.isCommitted && data.barsImage}
-          {@const showLockSlap = isLockedReveal() && s.isCommitted}
-          {@const dropping = inPostStealReveal && !s.isCommitted}
-          {@const showLateTag = inPostStealReveal && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
-          {@const isAcBidder = currentEvent.kind === 'auto' && acBiddersLower.has(s.school.toLowerCase())}
-          {@const acFading = currentEvent.kind === 'auto' && acPhase === 'fading' && !isAcBidder}
-          {@const acHidden = currentEvent.kind === 'auto' && acPhase === 'solo_done' && !isAcBidder}
-          <div
-            class="school-card"
-            class:ineligible={s.eligible === false}
-            class:committed={currentEvent.kind === 'steal' && s.isCommitted}
-            class:ac-bidder={isAcBidder}
-            class:ac-fading={acFading}
-            class:ac-hidden={acHidden}
-            style:display={acHidden ? 'none' : null}
-          >
-            {#if currentEvent.kind === 'steal' && s.isCommitted}
-              <div class="committed-banner">Currently Committed</div>
-            {/if}
-            {#if showLateTag}
-              <div class="late-banner">Now You're Interested?</div>
-            {/if}
-            {#if isAcBidder && acPhase === 'megaphone'}
-              <div class="megaphone-burst" aria-hidden="true">
-                {#each (acMegaphonesBySchool[s.school] ?? []) as m, i (i)}
-                  <span
-                    class="megaphone"
-                    style:--m-dx="{m.dx}px"
-                    style:--m-dy="{m.dy}px"
-                    style:--m-delay="{m.delay}ms"
-                    style:--m-duration="{m.duration}ms"
-                  >📣</span>
-                {/each}
-              </div>
-            {/if}
-            <div class="helmet-frame">
-              {#if s.helmet}
-                <img src={s.helmet} alt={s.school} class="helmet" referrerpolicy="no-referrer" />
-              {:else}
-                <div class="helmet helmet-placeholder">{s.school[0] ?? '?'}</div>
-              {/if}
-              {#if s.eligible === false}
-                <div class="x-badge" aria-label="ineligible">×</div>
-              {/if}
-              {#if showBars}
-                <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
-              {/if}
-              {#if showLockSlap}
-                <div class="rect-stamp card-stamp" use:stampIn={{ thudTarget: '.school-card' }} aria-label="Locked">
-                  <div class="rect-stamp-inner">
-                    <span class="stamp-label">Locked</span>
-                    <span class="stamp-sub">Commitment Ironclad</span>
-                  </div>
-                </div>
-              {/if}
-            </div>
-            <div class="school-name">{s.school}</div>
-            <div class="school-pct">
-              {#if s.eligible === false}
-                <span class="pct-bad">{(s.raw ?? 0).toFixed(1)}% · below cut</span>
-              {:else if dropping}
-                <span class="pct-big dropping">{(lockedDropValues[s.school] ?? s.normalized ?? 0).toFixed(1)}<small>%</small></span>
-              {:else}
-                <span class="pct-big">{(s.normalized ?? 0).toFixed(1)}<small>%</small></span>
-              {/if}
-            </div>
+      {@const isAcBidder = currentEvent.kind === 'auto' && acBiddersLower.has(s.school.toLowerCase())}
+      {@const acFading = currentEvent.kind === 'auto' && acPhase === 'fading' && !isAcBidder}
+      {@const acHidden = currentEvent.kind === 'auto' && acPhase === 'solo_done' && !isAcBidder}
+      {@const showBars = inPostStealReveal && !s.isCommitted && data.barsImage}
+      {@const showLockSlap = isLockedReveal() && s.isCommitted}
+      {@const dropping = inPostStealReveal && !s.isCommitted}
+      {@const showLateTag = inPostStealReveal && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
+      <div
+        class="school-card"
+        class:ineligible={s.eligible === false}
+        class:committed={currentEvent.kind === 'steal' && s.isCommitted}
+        class:ac-bidder={isAcBidder}
+        class:ac-fading={acFading}
+        class:ac-hidden={acHidden}
+        style:display={acHidden ? 'none' : null}
+      >
+        {#if currentEvent.kind === 'steal' && s.isCommitted}
+          <div class="committed-banner">Currently Committed</div>
+        {/if}
+        {#if showLateTag}
+          <div class="late-banner">Now You're Interested?</div>
+        {/if}
+        {#if isAcBidder && acPhase === 'megaphone'}
+          <div class="megaphone-burst" aria-hidden="true">
+            {#each (acMegaphonesBySchool[s.school] ?? []) as m, i (i)}
+              <span
+                class="megaphone"
+                style:--m-dx="{m.dx}px"
+                style:--m-dy="{m.dy}px"
+                style:--m-delay="{m.delay}ms"
+                style:--m-duration="{m.duration}ms"
+              >📣</span>
+            {/each}
           </div>
+        {/if}
+        <div class="helmet-frame">
+          {#if s.helmet}
+            <img src={s.helmet} alt={s.school} class="helmet" referrerpolicy="no-referrer" />
+          {:else}
+            <div class="helmet helmet-placeholder">{s.school[0] ?? '?'}</div>
+          {/if}
+          {#if s.eligible === false}
+            <div class="x-badge" aria-label="ineligible">×</div>
+          {/if}
+          {#if showBars}
+            <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
+          {/if}
+          {#if showLockSlap}
+            <div class="rect-stamp card-stamp" use:stampIn={{ thudTarget: '.school-card' }} aria-label="Locked">
+              <div class="rect-stamp-inner">
+                <span class="stamp-label">Locked</span>
+                <span class="stamp-sub">Commitment Ironclad</span>
+              </div>
+            </div>
+          {/if}
+        </div>
+        <div class="school-name">{s.school}</div>
+        <div class="school-pct">
+          {#if s.eligible === false}
+            <span class="pct-bad">{(s.raw ?? 0).toFixed(1)}% · below cut</span>
+          {:else if dropping}
+            <span class="pct-big dropping">{(lockedDropValues[s.school] ?? s.normalized ?? 0).toFixed(1)}<small>%</small></span>
+          {:else}
+            <span class="pct-big">{(s.normalized ?? 0).toFixed(1)}<small>%</small></span>
+          {/if}
+        </div>
+      </div>
+    {/snippet}
+
+    <!-- Schools display — shown pre-roll AND during locked / stayed reveals.
+         Auto-commit Phase 2 (contested) renders a simpler grid further below. -->
+    {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading' || acPhase === 'solo_done')}
+      <div class="schools" class:schools-locked={isLockedReveal()}>
+        {#each currentEvent.display.schools as s (s.school)}
+          {@render schoolCard(s)}
         {/each}
       </div>
     {/if}

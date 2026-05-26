@@ -146,10 +146,13 @@
           upsetPhase === 'spin_fast' ||
           upsetPhase === 'spin_slow'
         );
-      if (rotating) {
-        spinRotation += spinSpeed;
-        if (spinnerEl) spinnerEl.style.transform = `rotate(${spinRotation}deg)`;
-      }
+      if (rotating) spinRotation += spinSpeed;
+      // Always publish the current angle as a CSS custom property; the
+      // .spinner-img base rule reads it via transform: rotate(var(--spin-deg)).
+      // Using a custom prop instead of element.style.transform means the
+      // phase-specific CSS rules (.upset-in, .upset-explode, etc.) can
+      // override `transform` cleanly — no inline-style war.
+      if (spinnerEl) spinnerEl.style.setProperty('--spin-deg', `${spinRotation}deg`);
       spinRaf = requestAnimationFrame(tick);
     };
     spinRaf = requestAnimationFrame(tick);
@@ -226,26 +229,12 @@
     }
   });
 
-  // Clear the inline rotate() transform at phase boundaries where the
-  // CSS animation needs to drive scale/opacity itself (it would otherwise
-  // be overridden by element.style.transform = `rotate(...)` from the loop).
+  // Reset the rotation accumulator at the start of the upset 'in' phase
+  // so the helmet springs in from a clean angle. The CSS variable is
+  // updated on the next RAF tick. No inline-transform-clearing effect
+  // needed — phase-specific rules override `transform` directly.
   $effect(() => {
-    if (!spinnerEl) return;
-    if (upsetPhase === 'in') {
-      spinnerEl.style.transform = '';
-      spinRotation = 0;
-    } else if (upsetPhase === 'pulse') {
-      spinnerEl.style.transform = '';
-    } else if (
-      upsetPhase === 'explode'
-      || upsetPhase === 'confetti'
-      || upsetPhase === 'cooling'
-    ) {
-      // Let the .upset-explode CSS rule's transform take over.
-      spinnerEl.style.transform = '';
-    }
-    // For 'spin_fast' / 'spin_slow' / 'stop_glow' / 'off' the spin loop
-    // (or the last-tick frozen value) controls the transform.
+    if (upsetPhase === 'in') spinRotation = 0;
   });
 
   // Size the confetti canvas to viewport, kept in sync on resize.
@@ -1744,8 +1733,11 @@
   .spinner-img {
     width: 260px; height: 260px; object-fit: contain;
     will-change: transform, filter;
-    /* Rotation is JS-driven via inline `transform` during spin_fast / spin_slow.
-       Other phases drive scale + opacity + filter via CSS classes below. */
+    /* JS spin loop publishes the current rotation as --spin-deg; the phase
+       classes below (.upset-in, .upset-explode) override `transform`
+       entirely when they need to drive scale + opacity. No inline
+       style.transform writes — keeps the cascade predictable. */
+    transform: rotate(var(--spin-deg, 0deg));
   }
   /* Fallback (no placeholder helmet uploaded) uses CSS-only rotation. */
   .spinner-img.rotating {

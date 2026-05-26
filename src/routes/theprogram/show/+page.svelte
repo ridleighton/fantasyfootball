@@ -1075,7 +1075,7 @@
     {#if currentEvent.kind === 'auto' && acPhase === 'phase2_ready'}
       <div class="ac-phase2-head">
         <div class="ac-phase2-eyebrow">Auto-Commit Contested</div>
-        <h2 class="ac-phase2-title tp-stamped-cream">Multiple schools went all in. Roll to decide.</h2>
+        <p class="ac-phase2-prompt">Multiple schools went all in. Roll to decide.</p>
       </div>
       <div class="schools">
         {#each acPhase2Schools as s (s.school)}
@@ -2167,13 +2167,16 @@
     color: var(--tp-gold-soft);
     margin-bottom: 8px;
   }
-  .ac-phase2-title {
-    font-family: var(--tp-display);
-    font-size: clamp(28px, 4vw, 48px);
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    line-height: 1;
+  .ac-phase2-prompt {
+    /* Sits just a few points above the eyebrow (12px) — running body
+       text, not a stamped headline. */
+    font-family: var(--tp-body);
+    font-size: 15px;
+    line-height: 1.35;
+    color: var(--tp-cream);
+    font-style: italic;
     margin: 0;
+    text-shadow: 0 1px 0 var(--tp-navy-dark);
   }
 
   /* Stolen reveal — committed card visible, stealer slams on top */

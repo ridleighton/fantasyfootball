@@ -2,7 +2,7 @@ import { createClient } from '$lib/server/db.js';
 import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
 import { toCsv } from '$lib/server/theprogram/csv.js';
 import {
-  groupEvents,
+  loadEventsForWeek,
   computeCommit,
   computeSteal,
   computeAutoCommit
@@ -57,22 +57,7 @@ export async function GET() {
   const db = await createClient();
   let events;
   try {
-    const [rowsRes, orderRes] = await Promise.all([
-      db.query(
-        `SELECT id, conference, type, player, school, locked, in_original_roll,
-                odds, result, committed_school
-           FROM program_roll_events
-          WHERE week_id = $1
-          ORDER BY id ASC`,
-        [weekId]
-      ),
-      db.query(
-        `SELECT conference FROM program_conference_order
-          WHERE week_id = $1 ORDER BY position ASC`,
-        [weekId]
-      )
-    ]);
-    events = groupEvents(rowsRes.rows, orderRes.rows.map(r => r.conference));
+    ({ events } = await loadEventsForWeek(db, weekId));
   } finally {
     await db.end();
   }

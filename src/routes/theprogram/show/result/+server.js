@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { createClient } from '$lib/server/db.js';
 import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
-import { groupEvents, executeRoll } from '$lib/server/theprogram/show.js';
+import { loadEventsForWeek, executeRoll } from '$lib/server/theprogram/show.js';
 
 export async function POST({ request }) {
   const { weekId } = await requireActiveWeek();
@@ -13,23 +13,7 @@ export async function POST({ request }) {
 
   const db = await createClient();
   try {
-    const [rowsRes, orderRes] = await Promise.all([
-      db.query(
-        `SELECT id, conference, type, player, school, locked, in_original_roll,
-                odds, result, committed_school
-           FROM program_roll_events
-          WHERE week_id = $1
-          ORDER BY id ASC`,
-        [weekId]
-      ),
-      db.query(
-        `SELECT conference FROM program_conference_order
-          WHERE week_id = $1 ORDER BY position ASC`,
-        [weekId]
-      )
-    ]);
-    const conferenceOrder = orderRes.rows.map(r => r.conference);
-    const events = groupEvents(rowsRes.rows, conferenceOrder);
+    const { events } = await loadEventsForWeek(db, weekId);
     const ev = events[eventIndex];
     if (!ev) throw error(404, 'Event not found at that index.');
 

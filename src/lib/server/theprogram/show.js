@@ -408,3 +408,29 @@ export function colorsForSchool(photos, schoolName) {
   if (!h) return null;
   return { primary: h.primary, secondary: h.secondary };
 }
+
+// ---------------- Shared loader ----------------
+// Fetches all roll-event rows for the week + the saved conference order in
+// one round trip, and returns the grouped events. Every endpoint that
+// touches roll data (page load, result, edit-event, export) used to inline
+// this same SELECT + JOIN pattern with the same column list.
+export async function loadEventsForWeek(db, weekId) {
+  const [rowsRes, orderRes] = await Promise.all([
+    db.query(
+      `SELECT id, conference, type, player, school, locked, in_original_roll,
+              odds, result, committed_school
+         FROM program_roll_events
+        WHERE week_id = $1
+        ORDER BY id ASC`,
+      [weekId]
+    ),
+    db.query(
+      `SELECT conference, position FROM program_conference_order
+        WHERE week_id = $1 ORDER BY position ASC`,
+      [weekId]
+    )
+  ]);
+  const conferenceOrder = orderRes.rows.map(r => r.conference);
+  const events = groupEvents(rowsRes.rows, conferenceOrder);
+  return { rows: rowsRes.rows, events, conferenceOrder };
+}

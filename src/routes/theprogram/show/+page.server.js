@@ -1,7 +1,7 @@
 import { createClient } from '$lib/server/db.js';
 import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
 import {
-  groupEvents,
+  loadEventsForWeek,
   computeCommit,
   computeSteal,
   computeAutoCommit,
@@ -16,23 +16,7 @@ export async function load() {
   const { weekId, weekNumber } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [rowsRes, orderRes] = await Promise.all([
-      db.query(
-        `SELECT id, conference, type, player, school, locked, in_original_roll,
-                odds, result, committed_school
-           FROM program_roll_events
-          WHERE week_id = $1
-          ORDER BY id ASC`,
-        [weekId]
-      ),
-      db.query(
-        `SELECT conference, position FROM program_conference_order
-          WHERE week_id = $1 ORDER BY position ASC`,
-        [weekId]
-      )
-    ]);
-
-    const conferenceOrder = orderRes.rows.map(r => r.conference);
+    const { events, conferenceOrder } = await loadEventsForWeek(db, weekId);
     const hasOrder = conferenceOrder.length > 0;
 
     if (!hasOrder) {
@@ -45,8 +29,6 @@ export async function load() {
         conferenceList: []
       };
     }
-
-    const events = groupEvents(rowsRes.rows, conferenceOrder);
 
     const allSchools = new Set();
     const decorated = events.map((ev, i) => {

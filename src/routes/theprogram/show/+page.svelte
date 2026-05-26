@@ -2232,22 +2232,45 @@
      and message are explicitly centered. Without this the inline-block
      stack + block winner-name composition could read slightly off-center
      depending on font-metric anomalies in the player-stamp area. */
+  /* Steal-success reveal: explicit centering at every layer.
+     - The reveal-stage is a column flex with align-items: center to
+       horizontally center each child (stack, name, message).
+     - The stolen-stack is a fixed 320x320 block centered via the flex
+       container — auto horizontal margins removed because they
+       interact unpredictably with align-items: center in column flex.
+     - .winner-name forced to width 100% so its inner justify-content
+       has the full row to center within (otherwise it sizes to text
+       content and centering can read as left-leaning for short names
+       compared to the wider stack above).
+     - .steal-message keeps its max-width: 760px + margin auto for
+       symmetric centering. */
   .reveal-stage.steal-success {
     display: flex;
     flex-direction: column;
     align-items: center;
+    text-align: center;
   }
   .stolen-stack {
     position: relative;
     width: 320px;
     height: 320px;
-    margin: 0 auto 48px;
+    margin: 0 0 48px;
+    flex-shrink: 0;
   }
   .stolen-stack .winner-card {
     position: absolute;
     inset: 0;
     margin: 0;
     transform: none;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+  }
+  .reveal-stage.steal-success .winner-name {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
   }
   /* Stolen reveal: during the 3-second hold the committed school card
      gets the gold "currently committed" glow + a "Currently Committed

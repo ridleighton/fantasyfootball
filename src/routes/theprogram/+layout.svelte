@@ -261,22 +261,25 @@
   }
 
   /* Section divider with centered ornament */
+  /* Spec: hairline pewter rule with a single centered ornament. Use
+     once per page max — don't multiply them. Ornament reads crimson
+     @ 70% so it doesn't compete with the gold reserved for victories. */
   .tp-app :global(.tp-divider) {
     display: flex;
     align-items: center;
     gap: 14px;
     margin: 28px 0;
-    color: var(--tp-rule);
   }
   .tp-app :global(.tp-divider::before),
   .tp-app :global(.tp-divider::after) {
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--tp-rule);
+    background: var(--tp-pewter);
   }
   .tp-app :global(.tp-divider-ornament) {
-    color: var(--tp-gold);
+    color: var(--tp-navy);
+    opacity: 0.7;
     font-size: 14px;
     letter-spacing: 0.4em;
   }

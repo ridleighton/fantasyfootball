@@ -213,69 +213,73 @@
     margin: 14px 0 28px;
   }
 
+  /* Spec: table sits directly on the cream page, no wrapper card. */
   .cv-table-wrap {
-    background: var(--tp-cream);
-    border: 1px solid var(--tp-rule);
-    border-radius: 4px;
+    background: transparent;
+    border: none;
     overflow-x: auto;
-    box-shadow: inset 0 0 0 1px rgba(244, 236, 221, 0.9);
   }
   .cv-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
     font-family: var(--tp-body);
+    color: var(--tp-navy-dark);
   }
+  /* Header row: crimson-ink text in display caps; 2px crimson bottom
+     border, 1px gold rule 2px below it (via thead's box-shadow). */
   .cv-table thead {
-    background: var(--tp-navy);
+    background: transparent;
   }
   .cv-table th {
     padding: 12px 10px;
     text-align: left;
-    color: var(--tp-cream);
-    font-family: var(--tp-display);
-    font-size: 11px;
+    color: var(--tp-navy-dark);
+    font-family: var(--tp-display-condensed);
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     white-space: nowrap;
-    border-right: 1px solid rgba(244, 236, 221, 0.12);
+    border-bottom: 2px solid var(--tp-navy);
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
   }
-  .cv-table th:last-child { border-right: none; }
+  /* Body cells: hairline pewter column dividers, no row borders. */
   .cv-table td {
-    padding: 4px 6px;
-    border-bottom: 1px solid var(--tp-rule-soft);
-    border-right: 1px solid var(--tp-rule-soft);
+    padding: 6px 8px;
+    border-right: 1px solid var(--tp-pewter);
     vertical-align: middle;
   }
   .cv-table td:last-child { border-right: none; }
-  .cv-table tbody tr:hover { background: rgba(200, 162, 74, 0.06); }
-  .cv-table tbody tr:nth-child(even) { background: rgba(15, 42, 71, 0.025); }
-  .cv-table tbody tr:nth-child(even):hover { background: rgba(200, 162, 74, 0.08); }
+  /* Alternating row backgrounds per spec — cream / cream-sunk. */
+  .cv-table tbody tr:nth-child(odd)  { background: var(--tp-cream); }
+  .cv-table tbody tr:nth-child(even) { background: var(--tp-cream-2); }
+  .cv-table tbody tr:hover { background: rgba(217, 164, 65, 0.12); }
 
-  /* Notebook-style inline inputs — no heavy borders */
+  /* Inline-edit inputs — quiet by default, on focus get the 1px
+     crimson border + 1px gold hairline 2px below (notebook underline). */
   .cv-table input[type="text"],
   .cv-table select {
     width: 100%;
     padding: 7px 8px;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 3px;
-    color: var(--tp-ink);
+    border-radius: 2px;
+    color: var(--tp-navy-dark);
     font-family: var(--tp-body);
     font-size: 14px;
     box-sizing: border-box;
   }
   .cv-table input[type="text"]:hover,
   .cv-table select:hover {
-    background: var(--tp-cream-2);
+    background: var(--tp-cream);
   }
   .cv-table input[type="text"]:focus,
   .cv-table select:focus {
     outline: none;
     background: var(--tp-cream);
-    border-color: var(--tp-gold-2);
-    box-shadow: 0 0 0 2px rgba(200, 162, 74, 0.25);
+    border-color: var(--tp-navy);
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
   }
   .cv-wide { min-width: 240px; }
   .cv-del {

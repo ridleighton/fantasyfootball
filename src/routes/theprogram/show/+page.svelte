@@ -2345,9 +2345,9 @@
     background: var(--tp-navy-2);
     box-shadow: none;
   }
-  .prev-note { color: rgba(244, 236, 221, 0.78); font-style: italic; margin-bottom: 14px; font-size: 14px; }
+  .prev-note { color: var(--tp-oxblood); font-style: italic; margin-bottom: 14px; font-size: 14px; }
   .prev-note b {
-    color: var(--tp-gold-soft);
+    color: #111111;
     font-style: normal;
     font-family: var(--tp-display-condensed);
     letter-spacing: 0.1em;

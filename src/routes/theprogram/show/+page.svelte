@@ -1859,7 +1859,7 @@
     background: var(--tp-crimson-wash);
     border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
-    padding: 14px 10px 14px;
+    padding: 6px 6px 10px;
     position: relative;
     transition: border-color 0.12s ease;
   }
@@ -1919,14 +1919,14 @@
     white-space: nowrap;
   }
 
-  /* Helmet area — aspect 1105/957 ≈ 1.155 (source crop). Wider than
-     tall but only slightly, so the helmet fills the tile aggressively.
-     Card content width is now 240 - 20 = 220px, frame ≈ 220 × 190. */
+  /* Helmet area — aspect 1105/957 ≈ 1.155 (source crop). Frame fills
+     the card width minus 12px padding (≈228 × 197). The helmet image
+     uses object-fit: cover so the source crops to this frame. */
   .helmet-frame {
     position: relative;
     width: 100%;
     aspect-ratio: 1105 / 957;
-    margin: 0 auto 10px;
+    margin: 0 auto 4px;
     display: grid;
     place-items: center;
   }
@@ -2126,14 +2126,14 @@
   }
   .winner-card {
     position: relative;
-    width: 360px;
-    height: 312px; /* 360 / (1105/957) ≈ 312 */
+    width: 400px;
+    height: 346px; /* 400 / (1105/957) ≈ 346 */
     background: var(--tp-cream);
     border: 2.5px solid var(--tp-navy);
     border-radius: 6px;
     display: grid;
     place-items: center;
-    padding: 12px;
+    padding: 6px;
     /* Spec: an additional outer gold ring (4–6px) appears on the
        winning reveal — gold-on-cream contrast does the dramatic work.
        This is the layered border treatment (allowed), not a drop

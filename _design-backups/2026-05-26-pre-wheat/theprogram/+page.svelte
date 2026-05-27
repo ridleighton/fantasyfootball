@@ -16,6 +16,8 @@
 </script>
 
 <div class="entry">
+  <div class="entry-stripes" aria-hidden="true"></div>
+
   <div class="entry-card">
     <div class="seal" aria-hidden="true">
       <div class="seal-ring"></div>
@@ -129,7 +131,20 @@
     position: relative;
     overflow: hidden;
   }
-  /* .entry-stripes retired — wheat backdrop is solid, no pinstripe. */
+  /* Subtle varsity stripes at the edges */
+  .entry-stripes {
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        transparent 0,
+        transparent 14px,
+        rgba(200, 162, 74, 0.04) 14px,
+        rgba(200, 162, 74, 0.04) 16px
+      );
+    pointer-events: none;
+  }
   .entry-card {
     position: relative;
     width: 100%;

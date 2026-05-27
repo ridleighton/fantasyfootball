@@ -831,6 +831,8 @@
 {:else if currentEvent}
   <!-- ============================ Event ============================ -->
   <div class="theater">
+    <div class="theater-stripes" aria-hidden="true"></div>
+
     <div class="event-topbar">
       <button class="tp-pill tp-pill-small" onclick={returnToList}>← Return to List</button>
       <div class="event-breadcrumb">
@@ -1220,6 +1222,8 @@
 {:else if currentConf && !editOpen && !editSaving}
   <!-- ============================ Conference Launcher ============================ -->
   <div class="launcher">
+    <div class="theater-stripes" aria-hidden="true"></div>
+
     <header class="launcher-head">
       <div class="launcher-eyebrow">Now Entering</div>
       <h1 class="launcher-title tp-stamped-cream">{currentConf.name}</h1>
@@ -1528,7 +1532,19 @@
     position: relative;
     overflow: hidden;
   }
-  /* .theater-stripes retired — wheat backdrop is solid, no pinstripe. */
+  .theater-stripes {
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        transparent 0,
+        transparent 18px,
+        rgba(217, 164, 65, 0.05) 18px,
+        rgba(217, 164, 65, 0.05) 20px
+      );
+    pointer-events: none;
+  }
 
   .event-topbar {
     position: relative;

@@ -9,6 +9,47 @@
     { href: '/theprogram/commish', label: 'Commish View' },
     { href: '/theprogram/config', label: 'Config' }
   ];
+
+  // Background variant toggle for design review.
+  // Append ?bg=<name> to any /theprogram/* URL:
+  //   (default)     — current dark crimson
+  //   ?bg=soft      — lighter crimson wash
+  //   ?bg=pewter    — neutral grey-brown
+  //   ?bg=sepia     — warm vintage brown
+  //   ?bg=navy      — cool storm blue
+  //   ?bg=curtain   — gold-to-deep-crimson stage curtain vignette
+  const bgVariant = $derived($page.url.searchParams.get('bg') ?? '');
+  const lightBgs = new Set(['tan', 'cream', 'ivory', 'wheat', 'honey', 'beige', 'parchment', 'coffee']);
+  const isLightBg = $derived(lightBgs.has(bgVariant));
+  const variantLabels = {
+    '': 'Default · dark crimson',
+    soft: 'Soft · muted crimson',
+    sepia: 'Sepia · vintage leather',
+    charcoal: 'Charcoal · neutral dark',
+    forest: 'Forest · gridiron green',
+    bordeaux: 'Bordeaux · deep wine',
+    // Light tan / cream family — flat solid colors. Cream cards + cream
+    // text will lose contrast on these; useful for comparing the warm /
+    // light direction.
+    tan: 'Tan · #DCC3AA',
+    cream: 'Cream · #F1E2D1',
+    ivory: 'Ivory · #FFFDE1',
+    wheat: 'Wheat · #E6CFA9',
+    honey: 'Honey · #E8C999',
+    beige: 'Beige · #F1E3D3',
+    parchment: 'Parchment · #E5D0AC',
+    coffee: 'Coffee · #AF8260'
+  };
+
+  // Build a pill URL that preserves every other query param on the page
+  // (e.g. ?conf=C1&i=0) and just swaps/clears the bg key.
+  function bgHref(value) {
+    const params = new URLSearchParams($page.url.searchParams);
+    if (value) params.set('bg', value);
+    else params.delete('bg');
+    const qs = params.toString();
+    return $page.url.pathname + (qs ? `?${qs}` : '');
+  }
 </script>
 
 <svelte:head>
@@ -21,7 +62,7 @@
   />
 </svelte:head>
 
-<div class="tp-app">
+<div class="tp-app" data-bg={bgVariant} data-light={isLightBg ? '1' : '0'}>
   {#if showNav}
     <nav class="tp-nav">
       <div class="tp-nav-inner">
@@ -52,6 +93,27 @@
   <main class="tp-main">
     {@render children()}
   </main>
+
+  <!-- Background variant picker (dev/review only). Append ?bg=<name> to
+       any /theprogram/* URL to compare options live. -->
+  <div class="tp-bg-picker" aria-label="Background variant picker">
+    <div class="tp-bg-picker-label">Backdrop · {variantLabels[bgVariant] ?? variantLabels['']}</div>
+    <div class="tp-bg-picker-buttons">
+      {#each [
+        ['', 'Default'], ['soft', 'Soft'], ['sepia', 'Sepia'],
+        ['charcoal', 'Charcoal'], ['forest', 'Forest'], ['bordeaux', 'Bordeaux'],
+        ['tan', 'Tan'], ['cream', 'Cream'], ['ivory', 'Ivory'], ['wheat', 'Wheat'],
+        ['honey', 'Honey'], ['beige', 'Beige'], ['parchment', 'Parchment'], ['coffee', 'Coffee']
+      ] as [v, label]}
+        <a
+          class="tp-bg-pill"
+          class:active={bgVariant === v}
+          href={bgHref(v)}
+          data-sveltekit-noscroll
+        >{label}</a>
+      {/each}
+    </div>
+  </div>
 </div>
 
 <style>
@@ -90,47 +152,119 @@
     --tp-body: 'Lora', 'Caslon', Georgia, 'Times New Roman', serif;
 
     /* Full-bleed backdrop used by .entry, .stage, .launcher, .theater.
-       Wheat (#E6CFA9) is the locked-in show backdrop. */
-    --tp-stage-bg: #E6CFA9;
+       Default = current dark crimson; variant overrides below. */
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.55) 0%,
+        rgba(184, 37, 44, 0.55) 55%,
+        rgba(140, 27, 34, 0.7) 100%),
+      #1a0608;
 
     min-height: 100vh;
-    background: #E6CFA9;
+    background: var(--tp-cream);
     color: var(--tp-ink);
     font-family: var(--tp-body);
     font-feature-settings: 'onum' 1, 'liga' 1, 'kern' 1;
   }
 
   /* ============================================================
-     Show theme on the wheat backdrop.
-     Cards (school / winner / recruit / stage) take the SAME crimson
-     as the player-name stamp. Text inside cards is cream.
-     Floating prose on the backdrop becomes crimson so it reads on
-     the wheat field.
+     Background variants — toggle via ?bg=<name> on any URL.
+     Each replaces --tp-stage-bg so all four full-bleed surfaces
+     pick it up.
      ============================================================ */
-  /* Reveal cards (school / winner / recruit) match the player-name's
-     crimson with cream text. Stage + entry cards keep their cream
-     surface — they host forms and need contrast for inputs. */
-  .tp-app :global(.school-card),
-  .tp-app :global(.winner-card),
-  .tp-app :global(.recruit-card) {
-    background: var(--tp-navy);
+  /* Soft — lighter, more washed-out crimson (less crushing). */
+  .tp-app[data-bg="soft"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.22) 0%,
+        rgba(184, 37, 44, 0.28) 55%,
+        rgba(140, 27, 34, 0.42) 100%),
+      #3a1518;
+  }
+  /* Sepia — vintage leather, warm reddish-brown (no yellow / olive
+     undertones). Reads like an old letterman jacket or cracked
+     book spine. */
+  .tp-app[data-bg="sepia"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(175, 100, 65, 0.28) 0%,
+        rgba(130, 70, 50, 0.45) 60%,
+        rgba(75, 38, 26, 0.72) 100%),
+      #241510;
+  }
+  /* Charcoal — neutral dark grey, lets gold + crimson accents pop
+     without competing tonally. */
+  .tp-app[data-bg="charcoal"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(150, 150, 150, 0.22) 0%,
+        rgba(85, 85, 85, 0.45) 60%,
+        rgba(35, 35, 35, 0.72) 100%),
+      #181818;
+  }
+  /* Forest — deep gridiron green. Cool counterpoint to the crimson
+     brand chrome. */
+  .tp-app[data-bg="forest"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(80, 140, 95, 0.28) 0%,
+        rgba(45, 95, 65, 0.48) 60%,
+        rgba(20, 55, 35, 0.78) 100%),
+      #0e2419;
+  }
+  /* Bordeaux — deep wine red, same family as the crimson but darker
+     and more elegant. */
+  .tp-app[data-bg="bordeaux"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(125, 35, 55, 0.32) 0%,
+        rgba(90, 22, 42, 0.55) 60%,
+        rgba(50, 10, 22, 0.82) 100%),
+      #1a060e;
+  }
+  /* Light tan / cream family — flat solid colors per request. These
+     will desaturate the cream school cards and cream player text,
+     so card / typography colors would need adjusting if one is chosen
+     as the final default. */
+  .tp-app[data-bg="tan"]       { --tp-stage-bg: #DCC3AA; }
+  .tp-app[data-bg="cream"]     { --tp-stage-bg: #F1E2D1; }
+  .tp-app[data-bg="ivory"]     { --tp-stage-bg: #FFFDE1; }
+  .tp-app[data-bg="wheat"]     { --tp-stage-bg: #E6CFA9; }
+  .tp-app[data-bg="honey"]     { --tp-stage-bg: #E8C999; }
+  .tp-app[data-bg="beige"]     { --tp-stage-bg: #F1E3D3; }
+  .tp-app[data-bg="parchment"] { --tp-stage-bg: #E5D0AC; }
+  .tp-app[data-bg="coffee"]    { --tp-stage-bg: #AF8260; }
+
+  /* ============================================================
+     Light-backdrop theme inversion.
+     When any of the eight light variants is active, .tp-app gets
+     data-light="1" and the rules below flip card surfaces, card
+     text, floating text, and the player-name stamp so the show
+     reads cohesively on a light field.
+     ============================================================ */
+  .tp-app[data-light="1"] :global(.school-card),
+  .tp-app[data-light="1"] :global(.winner-card),
+  .tp-app[data-light="1"] :global(.recruit-card),
+  .tp-app[data-light="1"] :global(.stage-card) {
+    background: var(--tp-navy-dark);
     color: var(--tp-cream);
     border-color: var(--tp-navy-dark);
   }
-  .tp-app :global(.school-name),
-  .tp-app :global(.pct-big),
-  .tp-app :global(.recruit-player),
-  .tp-app :global(.recruit-num) {
+  /* Text inside cards: navy → cream */
+  .tp-app[data-light="1"] :global(.school-name),
+  .tp-app[data-light="1"] :global(.pct-big),
+  .tp-app[data-light="1"] :global(.recruit-player),
+  .tp-app[data-light="1"] :global(.recruit-num) {
     color: var(--tp-cream);
   }
-  .tp-app :global(.helmet-placeholder) {
+  /* Helmet placeholder background */
+  .tp-app[data-light="1"] :global(.helmet-placeholder) {
     background: rgba(244, 236, 221, 0.08);
-    color: rgba(244, 236, 221, 0.55);
+    color: rgba(244, 236, 221, 0.5);
   }
-  /* Player-name + winner-name stamped display text: crimson fill
-     with the gold + pewter outline stack so the stamp still reads on
-     wheat. */
-  .tp-app :global(.tp-stamped-cream) {
+  /* Stamped-cream display text (player + winner name): cream → navy
+     fill, same outline stack so it still reads as a stamped headline. */
+  .tp-app[data-light="1"] :global(.tp-stamped-cream) {
     color: var(--tp-navy);
     text-shadow:
       -1px -1px 0 var(--tp-gold),
@@ -144,39 +278,83 @@
        0  4px 0 rgba(0, 0, 0, 0.3),
        0  8px 24px rgba(0, 0, 0, 0.25);
   }
-  /* Floating prose on the backdrop becomes crimson so it reads on
-     wheat. Bold school names inside messages stay gold for emphasis. */
-  .tp-app :global(.spinner-label),
-  .tp-app :global(.steal-message),
-  .tp-app :global(.ac-solo-line),
-  .tp-app :global(.ac-phase2-prompt),
-  .tp-app :global(.stage-sub),
-  .tp-app :global(.launcher-sub),
-  .tp-app :global(.prev-note) {
+  /* Floating prose on the backdrop: cream → navy */
+  .tp-app[data-light="1"] :global(.spinner-label),
+  .tp-app[data-light="1"] :global(.steal-message),
+  .tp-app[data-light="1"] :global(.ac-solo-line),
+  .tp-app[data-light="1"] :global(.ac-phase2-prompt),
+  .tp-app[data-light="1"] :global(.stage-sub),
+  .tp-app[data-light="1"] :global(.launcher-sub),
+  .tp-app[data-light="1"] :global(.prev-note) {
     color: var(--tp-navy);
     text-shadow: none;
   }
-  .tp-app :global(.steal-message strong),
-  .tp-app :global(.ac-solo-line strong) {
+  /* Bold runs inside messages keep gold so the names pop */
+  .tp-app[data-light="1"] :global(.steal-message strong),
+  .tp-app[data-light="1"] :global(.ac-solo-line strong) {
     color: var(--tp-gold-2);
   }
-  .tp-app :global(.recruit-status.pending) {
+  /* Eyebrows + small caps labels: keep gold (already legible on light) */
+  /* Recruit status pending was muted cream — bump to navy on light bg */
+  .tp-app[data-light="1"] :global(.recruit-status.pending) {
     color: var(--tp-navy);
   }
-  /* Secondary translucent pills in the control row — invert so
-     they read on the wheat field. */
-  .tp-app :global(.control-row .tp-pill:not(.tp-pill-gold)) {
-    background: rgba(0, 0, 0, 0.16);
+  /* Control-row "secondary" pills used cream-on-translucent — invert
+     so they read on a light field. */
+  .tp-app[data-light="1"] :global(.control-row .tp-pill:not(.tp-pill-gold)) {
+    background: rgba(0, 0, 0, 0.18);
     color: var(--tp-navy);
-    border-color: rgba(0, 0, 0, 0.32);
+    border-color: rgba(0, 0, 0, 0.35);
   }
-  /* Edit modal sits crimson so it stays prominent on the wheat field. */
-  .tp-app :global(.edit-modal) {
-    background: var(--tp-navy);
+  /* Edit modal — dark surface looks cohesive against light backdrop */
+  .tp-app[data-light="1"] :global(.edit-modal) {
+    background: var(--tp-navy-dark);
     color: var(--tp-cream);
   }
-  .tp-app :global(.edit-title) { color: var(--tp-cream); }
-  .tp-app :global(.edit-eyebrow) { color: var(--tp-gold-soft); }
+  .tp-app[data-light="1"] :global(.edit-title) { color: var(--tp-cream); }
+  .tp-app[data-light="1"] :global(.edit-eyebrow) { color: var(--tp-gold-soft); }
+
+  /* Floating dev picker — sits in the bottom-right so it doesn't
+     intrude on the show layout. Remove this block when a variant
+     is finalized. */
+  .tp-bg-picker {
+    position: fixed;
+    bottom: 14px;
+    right: 14px;
+    z-index: 100;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--tp-cream);
+    border: 1px solid rgba(244, 236, 221, 0.25);
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  .tp-bg-picker-label {
+    margin-bottom: 6px;
+    color: var(--tp-gold-soft);
+    font-weight: 700;
+  }
+  .tp-bg-picker-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tp-bg-pill {
+    padding: 4px 8px;
+    border: 1px solid rgba(244, 236, 221, 0.3);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--tp-cream);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .tp-bg-pill:hover { background: rgba(244, 236, 221, 0.12); }
+  .tp-bg-pill.active {
+    background: var(--tp-gold);
+    color: var(--tp-navy-dark);
+    border-color: var(--tp-gold-2);
+  }
 
   .tp-app :global(*) { box-sizing: border-box; }
 

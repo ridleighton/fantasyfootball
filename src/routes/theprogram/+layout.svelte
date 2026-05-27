@@ -481,34 +481,25 @@
   .tp-nav-links { display: flex; gap: 6px; }
   .tp-nav-link {
     padding: 8px 16px;
-    border-radius: 2px;
     text-decoration: none;
     color: var(--tp-cream);
+    opacity: 0.65;
     font-family: var(--tp-display-condensed);
     font-weight: 600;
     font-size: 13px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    border-bottom: 2px solid transparent;
-    transition: border-color 0.12s ease, color 0.12s ease;
+    transition: opacity 0.12s ease, color 0.12s ease;
   }
-  .tp-nav-link:hover { color: var(--tp-gold-soft); }
+  .tp-nav-link:hover { opacity: 1; }
   .tp-nav-link.active {
-    color: var(--tp-cream);
-    border-bottom-color: var(--tp-gold);
+    color: var(--tp-gold);
+    opacity: 1;
   }
+  /* Spec: solid 2–3px gold rule under the top bar. No gradients. */
   .tp-nav-rule {
-    height: 4px;
-    background:
-      linear-gradient(
-        90deg,
-        var(--tp-gold) 0,
-        var(--tp-gold) 33.333%,
-        var(--tp-cream) 33.333%,
-        var(--tp-cream) 66.666%,
-        var(--tp-gold) 66.666%,
-        var(--tp-gold) 100%
-      );
+    height: 3px;
+    background: var(--tp-gold);
   }
 
   .tp-main { width: 100%; }

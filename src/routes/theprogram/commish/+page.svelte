@@ -209,8 +209,7 @@
   /* Gold underline rule beneath header (per styling brief) */
   .cv-rule {
     height: 2px;
-    background:
-      linear-gradient(90deg, var(--tp-navy) 0, var(--tp-navy) 60%, var(--tp-gold) 60%, var(--tp-gold) 100%);
+    background: var(--tp-gold);
     margin: 14px 0 28px;
   }
 

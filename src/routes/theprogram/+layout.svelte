@@ -127,22 +127,15 @@
     background: rgba(244, 236, 221, 0.08);
     color: rgba(244, 236, 221, 0.55);
   }
-  /* Player-name + winner-name stamped display text: crimson fill
-     with the gold + pewter outline stack so the stamp still reads on
-     wheat. */
+  /* Player-name + winner-name + launcher headlines: solid crimson on
+     the wheat backdrop. Drop the gold + pewter outline stack — wheat
+     is a calm field, no metal trim is needed for separation. Keep a
+     darker crimson under-rule and a soft cast shadow for depth. */
   .tp-app :global(.tp-stamped-cream) {
     color: var(--tp-navy);
     text-shadow:
-      -1px -1px 0 var(--tp-gold),
-       1px -1px 0 var(--tp-gold),
-      -1px  1px 0 var(--tp-gold),
-       1px  1px 0 var(--tp-gold),
-      -2px -2px 0 var(--tp-pewter-2),
-       2px -2px 0 var(--tp-pewter-2),
-      -2px  2px 0 var(--tp-pewter-2),
-       2px  2px 0 var(--tp-pewter-2),
-       0  4px 0 rgba(0, 0, 0, 0.3),
-       0  8px 24px rgba(0, 0, 0, 0.25);
+      0 2px 0 var(--tp-navy-dark),
+      0 6px 18px rgba(0, 0, 0, 0.18);
   }
   /* Floating prose on the backdrop becomes crimson so it reads on
      wheat. Bold school names inside messages stay gold for emphasis. */

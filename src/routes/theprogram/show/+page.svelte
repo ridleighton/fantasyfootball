@@ -1444,7 +1444,12 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3), 0 0 0 2px var(--tp-gold);
   }
-  .recruit-card.done { background: rgba(244, 236, 221, 0.65); }
+  /* Completed recruits get the darker crimson so the launcher reads
+     "done vs not done" at a glance. */
+  .recruit-card.done {
+    background: var(--tp-navy-dark);
+    color: var(--tp-cream);
+  }
   .recruit-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .recruit-num {
     font-family: var(--tp-display-condensed);

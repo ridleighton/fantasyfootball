@@ -117,9 +117,8 @@
   let acMegaphonesBySchool = $state({}); // school → [{ dx, dy, delay, duration }]
 
   function spawnMegaphoneParticles() {
-    // Doubled count + wider spread + longer per-particle duration for a
-    // more dramatic, slower burst.
-    const n = 30;
+    // Heavy, slow burst — 45 particles per bidder card.
+    const n = 45;
     return Array.from({ length: n }, (_, i) => {
       const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.6;
       const dist = 130 + Math.random() * 110;

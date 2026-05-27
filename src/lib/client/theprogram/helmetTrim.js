@@ -17,11 +17,11 @@ function loadImageEl(url, useCors) {
   });
 }
 
-// Threshold: pixels darker than this in all three channels become
-// transparent (kills the black/dark background some helmet PNGs have).
-// Alpha threshold: anything below this is treated as "background" when
-// computing the trim bbox.
-export async function trimHelmet(url, { darkStrip = 40, alphaCut = 8 } = {}) {
+// Crops to the alpha-bounding-box of the source image. We do NOT
+// recolor or strip any pixels — black/dark areas inside the helmet
+// (which are common: black helmets, navy stripes, etc.) are preserved.
+// Only fully/near-transparent margin pixels are excluded from the bbox.
+export async function trimHelmet(url, { alphaCut = 8 } = {}) {
   if (!url) return null;
   if (cache.has(url)) return cache.get(url);
   if (inflight.has(url)) return inflight.get(url);
@@ -54,14 +54,8 @@ export async function trimHelmet(url, { darkStrip = 40, alphaCut = 8 } = {}) {
     }
     const d = data.data;
 
-    // Pass 1: strip near-black pixels (kills dark background bleed).
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i] < darkStrip && d[i + 1] < darkStrip && d[i + 2] < darkStrip) {
-        d[i + 3] = 0;
-      }
-    }
-
-    // Pass 2: scan for the alpha-bounding-box of the remaining content.
+    // Scan for the alpha-bounding-box of the source. Pixels with
+    // alpha > alphaCut count as content.
     let minX = W, minY = H, maxX = -1, maxY = -1;
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
@@ -75,14 +69,17 @@ export async function trimHelmet(url, { darkStrip = 40, alphaCut = 8 } = {}) {
       }
     }
 
-    // No visible content? Bail to the original.
+    // No visible content? (Fully transparent image.) Bail.
     if (maxX < 0) return url;
 
-    // Draw the bg-stripped pixels back so the crop carries them.
-    ctx.putImageData(data, 0, 0);
+    // Image already tight (no transparent margin worth cropping)?
+    // Skip the canvas round-trip and just return the original URL.
+    if (minX === 0 && minY === 0 && maxX === W - 1 && maxY === H - 1) {
+      return url;
+    }
 
-    // Add a tiny breathing-room margin so we don't shave anti-aliased
-    // edges flush against the frame.
+    // Tiny breathing-room margin so we don't shave anti-aliased edges
+    // flush against the frame.
     const pad = Math.round(Math.max(W, H) * 0.01);
     const cropX = Math.max(0, minX - pad);
     const cropY = Math.max(0, minY - pad);

@@ -1918,6 +1918,9 @@
     text-transform: uppercase;
     border-radius: 2px;
     white-space: nowrap;
+    /* Sit above the card border and the gold inner rule (::after sits
+       at inset 4px and was striking through the bottom of the banner). */
+    z-index: 3;
   }
 
   /* Helmet area — aspect 1105/957 ≈ 1.155 (source crop). Frame fills

@@ -1,3 +1,4 @@
+import { dev } from '$app/environment';
 import { createClient } from '$lib/server/db.js';
 import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
 import {
@@ -12,7 +13,47 @@ import {
 
 const CONFERENCES = ['C1', 'C2', 'C3', 'C4', 'C5'];
 
-export async function load() {
+// Dev-only mock so the show page renders all four backdrop surfaces
+// (launcher + theater + finish) when DATABASE_URL isn't wired up locally.
+function mockShowData() {
+  const mkSchool = (school, raw) => ({
+    school, raw, eligible: true, normalized: raw, helmet: null, colors: null
+  });
+  const sampleEvent = {
+    globalIndex: 0,
+    conference: 'C1',
+    player: 'Sample Recruit',
+    type: 'Commit',
+    kind: 'commit',
+    display: {
+      schools: [
+        mkSchool('Texas', 40),
+        mkSchool('USC', 32),
+        mkSchool('Oklahoma', 28)
+      ],
+      threshold: 15,
+      solo: false
+    },
+    savedResult: null,
+    rowIds: [],
+    confIndex: 0
+  };
+  return {
+    weekId: 0,
+    weekNumber: 1,
+    hasOrder: true,
+    events: [sampleEvent],
+    conferenceList: [
+      { name: 'C1', events: [sampleEvent], total: 1, rolledCount: 0 },
+      { name: 'C2', events: [], total: 0, rolledCount: 0 }
+    ],
+    placeholderHelmet: null,
+    lockedImage: null,
+    barsImage: null
+  };
+}
+
+async function loadFromDb() {
   const { weekId, weekNumber } = await requireActiveWeek();
   const db = await createClient();
   try {
@@ -109,5 +150,14 @@ export async function load() {
     };
   } finally {
     await db.end();
+  }
+}
+
+export async function load() {
+  try {
+    return await loadFromDb();
+  } catch (e) {
+    if (dev) return mockShowData();
+    throw e;
   }
 }

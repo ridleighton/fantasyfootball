@@ -124,12 +124,7 @@
 <style>
   .entry {
     min-height: 100vh;
-    background:
-      radial-gradient(ellipse at top,
-        rgba(199, 50, 56, 0.55) 0%,
-        rgba(184, 37, 44, 0.55) 55%,
-        rgba(140, 27, 34, 0.7) 100%),
-      #1a0608;
+    background: var(--tp-stage-bg);
     display: grid;
     place-items: center;
     padding: 48px 24px;

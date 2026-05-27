@@ -9,6 +9,24 @@
     { href: '/theprogram/commish', label: 'Commish View' },
     { href: '/theprogram/config', label: 'Config' }
   ];
+
+  // Background variant toggle for design review.
+  // Append ?bg=<name> to any /theprogram/* URL:
+  //   (default)     — current dark crimson
+  //   ?bg=soft      — lighter crimson wash
+  //   ?bg=pewter    — neutral grey-brown
+  //   ?bg=sepia     — warm vintage brown
+  //   ?bg=navy      — cool storm blue
+  //   ?bg=curtain   — gold-to-deep-crimson stage curtain vignette
+  const bgVariant = $derived($page.url.searchParams.get('bg') ?? '');
+  const variantLabels = {
+    '': 'Default · dark crimson',
+    soft: 'Soft · muted crimson',
+    pewter: 'Pewter · neutral stone',
+    sepia: 'Sepia · vintage brown',
+    navy: 'Navy · cool storm',
+    curtain: 'Curtain · gold-to-deep-crimson'
+  };
 </script>
 
 <svelte:head>
@@ -21,7 +39,7 @@
   />
 </svelte:head>
 
-<div class="tp-app">
+<div class="tp-app" data-bg={bgVariant}>
   {#if showNav}
     <nav class="tp-nav">
       <div class="tp-nav-inner">
@@ -52,6 +70,23 @@
   <main class="tp-main">
     {@render children()}
   </main>
+
+  <!-- Background variant picker (dev/review only). Append ?bg=<name> to
+       any /theprogram/* URL to compare options live. -->
+  <div class="tp-bg-picker" aria-label="Background variant picker">
+    <div class="tp-bg-picker-label">Backdrop · {variantLabels[bgVariant] ?? variantLabels['']}</div>
+    <div class="tp-bg-picker-buttons">
+      {#each [['', 'Default'], ['soft', 'Soft'], ['pewter', 'Pewter'], ['sepia', 'Sepia'], ['navy', 'Navy'], ['curtain', 'Curtain']] as [v, label]}
+        <a
+          class="tp-bg-pill"
+          class:active={bgVariant === v}
+          href={`${$page.url.pathname}${v ? `?bg=${v}` : ''}${
+            v ? '' : ''
+          }`}
+        >{label}</a>
+      {/each}
+    </div>
+  </div>
 </div>
 
 <style>
@@ -89,11 +124,114 @@
     --tp-display-condensed: 'Oswald', 'Bebas Neue', 'Impact', sans-serif;
     --tp-body: 'Lora', 'Caslon', Georgia, 'Times New Roman', serif;
 
+    /* Full-bleed backdrop used by .entry, .stage, .launcher, .theater.
+       Default = current dark crimson; variant overrides below. */
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.55) 0%,
+        rgba(184, 37, 44, 0.55) 55%,
+        rgba(140, 27, 34, 0.7) 100%),
+      #1a0608;
+
     min-height: 100vh;
     background: var(--tp-cream);
     color: var(--tp-ink);
     font-family: var(--tp-body);
     font-feature-settings: 'onum' 1, 'liga' 1, 'kern' 1;
+  }
+
+  /* ============================================================
+     Background variants — toggle via ?bg=<name> on any URL.
+     Each replaces --tp-stage-bg so all four full-bleed surfaces
+     pick it up.
+     ============================================================ */
+  /* Soft — lighter, more washed-out crimson (less crushing). */
+  .tp-app[data-bg="soft"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(199, 50, 56, 0.22) 0%,
+        rgba(184, 37, 44, 0.28) 55%,
+        rgba(140, 27, 34, 0.42) 100%),
+      #3a1518;
+  }
+  /* Pewter — neutral grey-brown, lets the gold + crimson accents pop. */
+  .tp-app[data-bg="pewter"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(191, 184, 173, 0.28) 0%,
+        rgba(143, 137, 121, 0.42) 60%,
+        rgba(99, 94, 82, 0.6) 100%),
+      #3b3833;
+  }
+  /* Sepia — warm vintage brown, varsity-yearbook feel. */
+  .tp-app[data-bg="sepia"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(180, 130, 70, 0.28) 0%,
+        rgba(120, 85, 50, 0.42) 60%,
+        rgba(75, 50, 30, 0.7) 100%),
+      #2a1d12;
+  }
+  /* Navy — cool storm blue, distinct from the crimson brand. */
+  .tp-app[data-bg="navy"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(70, 95, 130, 0.42) 0%,
+        rgba(45, 65, 95, 0.6) 60%,
+        rgba(25, 40, 65, 0.85) 100%),
+      #10182a;
+  }
+  /* Curtain — gold pool at the top fading into deep crimson at the
+     edges, like a stage spotlight. */
+  .tp-app[data-bg="curtain"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(217, 164, 65, 0.32) 0%,
+        rgba(184, 37, 44, 0.45) 45%,
+        rgba(60, 12, 16, 0.85) 100%),
+      #16060a;
+  }
+
+  /* Floating dev picker — sits in the bottom-right so it doesn't
+     intrude on the show layout. Remove this block when a variant
+     is finalized. */
+  .tp-bg-picker {
+    position: fixed;
+    bottom: 14px;
+    right: 14px;
+    z-index: 100;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--tp-cream);
+    border: 1px solid rgba(244, 236, 221, 0.25);
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  .tp-bg-picker-label {
+    margin-bottom: 6px;
+    color: var(--tp-gold-soft);
+    font-weight: 700;
+  }
+  .tp-bg-picker-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tp-bg-pill {
+    padding: 4px 8px;
+    border: 1px solid rgba(244, 236, 221, 0.3);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--tp-cream);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .tp-bg-pill:hover { background: rgba(244, 236, 221, 0.12); }
+  .tp-bg-pill.active {
+    background: var(--tp-gold);
+    color: var(--tp-navy-dark);
+    border-color: var(--tp-gold-2);
   }
 
   .tp-app :global(*) { box-sizing: border-box; }

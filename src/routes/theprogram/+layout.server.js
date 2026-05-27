@@ -1,17 +1,24 @@
 import { redirect, error } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { createClient } from '$lib/server/db.js';
 import { photoUrl } from '$lib/server/theprogram/show.js';
 
 export async function load({ parent, url }) {
   const { session, profile } = await parent();
 
-  if (!session) {
-    const redirectTo = url.pathname + url.search;
-    throw redirect(303, `/auth/login?redirect=${encodeURIComponent(redirectTo)}`);
-  }
+  // Dev-only auth bypass for local design review. `dev` is the SvelteKit
+  // build flag — true under `npm run dev`, false in every production
+  // build, so this branch is dead code in the deployed bundle.
+  // Remove this block before shipping if you want the gate active in dev too.
+  if (!dev) {
+    if (!session) {
+      const redirectTo = url.pathname + url.search;
+      throw redirect(303, `/auth/login?redirect=${encodeURIComponent(redirectTo)}`);
+    }
 
-  if (!profile?.is_admin && !profile?.is_commissioner) {
-    throw error(403, 'Access denied — The Program is for commissioners and admins only.');
+    if (!profile?.is_admin && !profile?.is_commissioner) {
+      throw error(403, 'Access denied — The Program is for commissioners and admins only.');
+    }
   }
 
   // Look up the brand logo for the nav. Also ensures the newer columns on

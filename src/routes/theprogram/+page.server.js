@@ -1,16 +1,24 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { createClient } from '$lib/server/db.js';
 import { parseRollEvents } from '$lib/server/theprogram/parse-roll-events.js';
 
 export async function load() {
-  const db = await createClient();
   try {
-    const weeksRes = await db.query(
-      `SELECT id, week_number FROM program_weeks ORDER BY week_number ASC`
-    );
-    return { weeks: weeksRes.rows };
-  } finally {
-    await db.end();
+    const db = await createClient();
+    try {
+      const weeksRes = await db.query(
+        `SELECT id, week_number FROM program_weeks ORDER BY week_number ASC`
+      );
+      return { weeks: weeksRes.rows };
+    } finally {
+      await db.end();
+    }
+  } catch (e) {
+    // Dev-only DB fallback so the entry page still renders for design review
+    // when DATABASE_URL isn't wired up locally.
+    if (dev) return { weeks: [] };
+    throw e;
   }
 }
 

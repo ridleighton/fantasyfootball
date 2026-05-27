@@ -1856,7 +1856,12 @@
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
     position: relative;
   }
+  /* Below-threshold ("greyed out") schools — light-pink wash over the
+     crimson base. Text on this surface flips to ink + oxblood for
+     contrast (cream + gold-soft were washed out on the pink). */
   .school-card.ineligible { background: rgba(244, 236, 221, 0.55); }
+  .school-card.ineligible .school-name { color: var(--tp-ink); }
+  .school-card.ineligible .pct-bad { color: var(--tp-oxblood); }
   .school-card.committed {
     border-color: var(--tp-gold);
     box-shadow:

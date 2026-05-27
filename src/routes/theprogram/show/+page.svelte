@@ -1846,12 +1846,12 @@
     margin: 12px 0 36px;
   }
   .school-card {
-    width: 200px;
+    width: 240px;
     text-align: center;
     background: var(--tp-cream);
     border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
-    padding: 18px 14px 14px;
+    padding: 14px 10px 14px;
     position: relative;
   }
   /* Inner gold rule — 1px solid gold inset 4px from the border. Creates
@@ -1893,23 +1893,26 @@
     white-space: nowrap;
   }
 
-  /* Helmet area — ~1.3:1 aspect (wider than tall) per spec. The
-     card's content width (200px card - 28px padding) leaves ~172px;
-     at 1.3:1 the frame is ~172 × 132. */
+  /* Helmet area — aspect 1105/957 ≈ 1.155 (source crop). Wider than
+     tall but only slightly, so the helmet fills the tile aggressively.
+     Card content width is now 240 - 20 = 220px, frame ≈ 220 × 190. */
   .helmet-frame {
     position: relative;
     width: 100%;
-    aspect-ratio: 1.3 / 1;
-    margin: 0 auto 12px;
+    aspect-ratio: 1105 / 957;
+    margin: 0 auto 10px;
     display: grid;
     place-items: center;
   }
-  /* mix-blend-mode: multiply on a white card hides any white background
-     bleed around the helmet PNG so the logo dominates the tile. */
+  /* Helmet fills the 1105/957 frame — `cover` crops to the centered
+     helmet rather than letterboxing it, so the image dominates the
+     tile. mix-blend-mode: multiply hides any light background bleed
+     against the cream card. */
   .helmet {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
     mix-blend-mode: multiply;
   }
   .helmet-placeholder {
@@ -2097,14 +2100,14 @@
   }
   .winner-card {
     position: relative;
-    width: 280px;
-    height: 280px;
+    width: 360px;
+    height: 312px; /* 360 / (1105/957) ≈ 312 */
     background: var(--tp-cream);
     border: 2.5px solid var(--tp-navy);
     border-radius: 6px;
     display: grid;
     place-items: center;
-    padding: 22px;
+    padding: 12px;
     /* Spec: an additional outer gold ring (4–6px) appears on the
        winning reveal — gold-on-cream contrast does the dramatic work.
        This is the layered border treatment (allowed), not a drop
@@ -2122,9 +2125,10 @@
     pointer-events: none;
   }
   .winner-img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
     mix-blend-mode: multiply;
   }
   .bars-overlay {

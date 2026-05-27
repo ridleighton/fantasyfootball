@@ -22,10 +22,10 @@
   const variantLabels = {
     '': 'Default · dark crimson',
     soft: 'Soft · muted crimson',
-    pewter: 'Pewter · neutral stone',
-    sepia: 'Sepia · vintage brown',
-    navy: 'Navy · cool storm',
-    curtain: 'Curtain · gold-to-deep-crimson'
+    sepia: 'Sepia · vintage leather',
+    charcoal: 'Charcoal · neutral dark',
+    forest: 'Forest · gridiron green',
+    bordeaux: 'Bordeaux · deep wine'
   };
 
   // Build a pill URL that preserves every other query param on the page
@@ -86,7 +86,7 @@
   <div class="tp-bg-picker" aria-label="Background variant picker">
     <div class="tp-bg-picker-label">Backdrop · {variantLabels[bgVariant] ?? variantLabels['']}</div>
     <div class="tp-bg-picker-buttons">
-      {#each [['', 'Default'], ['soft', 'Soft'], ['pewter', 'Pewter'], ['sepia', 'Sepia'], ['navy', 'Navy'], ['curtain', 'Curtain']] as [v, label]}
+      {#each [['', 'Default'], ['soft', 'Soft'], ['sepia', 'Sepia'], ['charcoal', 'Charcoal'], ['forest', 'Forest'], ['bordeaux', 'Bordeaux']] as [v, label]}
         <a
           class="tp-bg-pill"
           class:active={bgVariant === v}
@@ -163,42 +163,46 @@
         rgba(140, 27, 34, 0.42) 100%),
       #3a1518;
   }
-  /* Pewter — neutral grey-brown, lets the gold + crimson accents pop. */
-  .tp-app[data-bg="pewter"] {
-    --tp-stage-bg:
-      radial-gradient(ellipse at top,
-        rgba(191, 184, 173, 0.28) 0%,
-        rgba(143, 137, 121, 0.42) 60%,
-        rgba(99, 94, 82, 0.6) 100%),
-      #3b3833;
-  }
-  /* Sepia — warm vintage brown, varsity-yearbook feel. */
+  /* Sepia — vintage leather, warm reddish-brown (no yellow / olive
+     undertones). Reads like an old letterman jacket or cracked
+     book spine. */
   .tp-app[data-bg="sepia"] {
     --tp-stage-bg:
       radial-gradient(ellipse at top,
-        rgba(180, 130, 70, 0.28) 0%,
-        rgba(120, 85, 50, 0.42) 60%,
-        rgba(75, 50, 30, 0.7) 100%),
-      #2a1d12;
+        rgba(175, 100, 65, 0.28) 0%,
+        rgba(130, 70, 50, 0.45) 60%,
+        rgba(75, 38, 26, 0.72) 100%),
+      #241510;
   }
-  /* Navy — cool storm blue, distinct from the crimson brand. */
-  .tp-app[data-bg="navy"] {
+  /* Charcoal — neutral dark grey, lets gold + crimson accents pop
+     without competing tonally. */
+  .tp-app[data-bg="charcoal"] {
     --tp-stage-bg:
       radial-gradient(ellipse at top,
-        rgba(70, 95, 130, 0.42) 0%,
-        rgba(45, 65, 95, 0.6) 60%,
-        rgba(25, 40, 65, 0.85) 100%),
-      #10182a;
+        rgba(150, 150, 150, 0.22) 0%,
+        rgba(85, 85, 85, 0.45) 60%,
+        rgba(35, 35, 35, 0.72) 100%),
+      #181818;
   }
-  /* Curtain — gold pool at the top fading into deep crimson at the
-     edges, like a stage spotlight. */
-  .tp-app[data-bg="curtain"] {
+  /* Forest — deep gridiron green. Cool counterpoint to the crimson
+     brand chrome. */
+  .tp-app[data-bg="forest"] {
     --tp-stage-bg:
       radial-gradient(ellipse at top,
-        rgba(217, 164, 65, 0.32) 0%,
-        rgba(184, 37, 44, 0.45) 45%,
-        rgba(60, 12, 16, 0.85) 100%),
-      #16060a;
+        rgba(80, 140, 95, 0.28) 0%,
+        rgba(45, 95, 65, 0.48) 60%,
+        rgba(20, 55, 35, 0.78) 100%),
+      #0e2419;
+  }
+  /* Bordeaux — deep wine red, same family as the crimson but darker
+     and more elegant. */
+  .tp-app[data-bg="bordeaux"] {
+    --tp-stage-bg:
+      radial-gradient(ellipse at top,
+        rgba(125, 35, 55, 0.32) 0%,
+        rgba(90, 22, 42, 0.55) 60%,
+        rgba(50, 10, 22, 0.82) 100%),
+      #1a060e;
   }
 
   /* Floating dev picker — sits in the bottom-right so it doesn't

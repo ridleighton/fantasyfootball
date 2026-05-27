@@ -1855,11 +1855,12 @@
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
     position: relative;
   }
-  /* Below-threshold ("invalid") schools — same white card; the red X
-     badge in the corner is the sole "out" indicator. Don't grey the
-     helmet, don't tint the card. */
+  /* Below-threshold schools — same white card. Helmet goes greyscale
+     + dimmed so eliminated schools read as "out"; the red X badge
+     reinforces the state. */
   .school-card.ineligible .school-name { color: var(--tp-navy-dark); }
   .school-card.ineligible .pct-bad { color: var(--tp-oxblood); }
+  .school-card.ineligible .helmet { opacity: 0.35; filter: grayscale(1); }
   .school-card.committed {
     border-color: var(--tp-gold);
     box-shadow:

@@ -903,7 +903,7 @@
          consistently; populated only when an outcome resolves. -->
     <div class="sr-only" role="status" aria-live="polite">{revealAnnouncement}</div>
     <div class="event-topbar">
-      <button class="tp-pill tp-pill-small" onclick={returnToList}>← Return to List</button>
+      <button class="tp-pill tp-pill-navy tp-pill-small" onclick={returnToList}>← Return to List</button>
       <div class="event-breadcrumb">
         <span class="tp-stamp">{currentConf.name}</span>
         <span class="event-sep">•</span>
@@ -1583,8 +1583,8 @@
   .launcher-jump { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .jump-pill {
     padding: 8px 14px;
-    background: rgba(244, 236, 221, 0.08);
-    border: 1px solid rgba(244, 236, 221, 0.25);
+    background: var(--tp-navy);
+    border: 1px solid var(--tp-navy-dark);
     border-radius: 999px;
     color: var(--tp-cream);
     font-family: var(--tp-display-condensed);
@@ -1597,7 +1597,7 @@
     align-items: center;
     gap: 8px;
   }
-  .jump-pill:hover { background: rgba(244, 236, 221, 0.16); }
+  .jump-pill:hover { background: var(--tp-navy-2); }
   .jump-pill.active {
     background: var(--tp-gold);
     color: var(--tp-navy-dark);

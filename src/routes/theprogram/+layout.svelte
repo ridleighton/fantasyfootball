@@ -164,12 +164,15 @@
   .tp-app :global(.recruit-status.pending) {
     color: var(--tp-navy-dark);
   }
-  /* Secondary translucent pills in the control row — invert so
-     they read on the wheat field. */
+  /* Secondary pills in the control row — solid crimson fill with cream
+     text so they sit beside gold pills as a clear red/gold pair. */
   .tp-app :global(.control-row .tp-pill:not(.tp-pill-gold)) {
-    background: rgba(0, 0, 0, 0.16);
-    color: var(--tp-navy);
-    border-color: rgba(0, 0, 0, 0.32);
+    background: var(--tp-navy);
+    color: var(--tp-cream);
+    border-color: var(--tp-navy-dark);
+  }
+  .tp-app :global(.control-row .tp-pill:not(.tp-pill-gold):hover:not(:disabled)) {
+    background: var(--tp-navy-2);
   }
   /* Edit modal sits crimson so it stays prominent on the wheat field. */
   .tp-app :global(.edit-modal) {
@@ -295,36 +298,14 @@
     line-height: 1;
   }
 
-  /* Three-layer "stamped" display treatment (crimson fill, gold outline,
-     pewter outer trim). Use for hero headlines on cream backdrops. */
+  /* Crimson-fill "stamped" display treatment for hero headlines on cream
+     backdrops. Outline layers stripped — keep only a deeper-crimson under-
+     rule so the H1 reads as mainly crimson. */
   .tp-app :global(.tp-stamped) {
     color: var(--tp-navy);
     text-shadow:
-      -1px -1px 0 var(--tp-gold),
-       1px -1px 0 var(--tp-gold),
-      -1px  1px 0 var(--tp-gold),
-       1px  1px 0 var(--tp-gold),
-      -2px -2px 0 var(--tp-pewter),
-       2px -2px 0 var(--tp-pewter),
-      -2px  2px 0 var(--tp-pewter),
-       2px  2px 0 var(--tp-pewter),
-       0  4px 0 var(--tp-pewter-2),
-       0  6px 0 rgba(0, 0, 0, 0.18);
-  }
-  /* Cream-fill variant for crimson backdrops */
-  .tp-app :global(.tp-stamped-cream) {
-    color: var(--tp-cream);
-    text-shadow:
-      -1px -1px 0 var(--tp-gold),
-       1px -1px 0 var(--tp-gold),
-      -1px  1px 0 var(--tp-gold),
-       1px  1px 0 var(--tp-gold),
-      -2px -2px 0 var(--tp-pewter),
-       2px -2px 0 var(--tp-pewter),
-      -2px  2px 0 var(--tp-pewter),
-       2px  2px 0 var(--tp-pewter),
        0  4px 0 var(--tp-navy-dark),
-       0  8px 24px rgba(0, 0, 0, 0.45);
+       0  6px 0 rgba(0, 0, 0, 0.18);
   }
 
   /* Pill buttons */

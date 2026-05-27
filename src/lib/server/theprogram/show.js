@@ -140,6 +140,20 @@ export function computeCommit(group) {
   const list = pairs.map(p => ({ school: p.school, raw: p.percent }));
   const threshold = commitThreshold(list.length);
   for (const s of list) s.eligible = s.raw >= threshold;
+
+  // Top-5 cap: a commit roll never has more than 5 schools in the running.
+  // If more than 5 pass the threshold, drop everyone below the 5th-place
+  // raw odds. Ties at the boundary all stay (so a true 5/6 tie produces a
+  // 6-school roll). Strict ordering above the boundary drops the surplus.
+  const stillEligible = list.filter(s => s.eligible);
+  if (stillEligible.length > 5) {
+    const sortedDesc = [...stillEligible].sort((a, b) => b.raw - a.raw);
+    const fifthRaw = sortedDesc[4].raw;
+    for (const s of list) {
+      if (s.eligible && s.raw < fifthRaw) s.eligible = false;
+    }
+  }
+
   const totalEligible = list.reduce((a, s) => a + (s.eligible ? s.raw : 0), 0);
   for (const s of list) {
     s.normalized = (s.eligible && totalEligible > 0) ? (s.raw / totalEligible) * 100 : 0;

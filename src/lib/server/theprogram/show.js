@@ -138,7 +138,12 @@ export function computeCommit(group) {
   }
 
   const list = pairs.map(p => ({ school: p.school, raw: p.percent }));
-  const threshold = commitThreshold(list.length);
+  // The top-5 cap means a roll never actually runs more than 5 schools,
+  // so the tier should reflect a 5-max post-cap pool: 6+ -> tier 5 (10%).
+  // Without this clamp a 6-school roll uses the 8% tier and lets a 9%
+  // school survive the threshold, only to escape the cap because it
+  // was already trimmed to 5 by the threshold cut.
+  const threshold = commitThreshold(Math.min(list.length, 5));
   for (const s of list) s.eligible = s.raw >= threshold;
 
   // Top-5 cap: a commit roll never has more than 5 schools in the running.

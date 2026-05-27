@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { goto, invalidateAll } from '$app/navigation';
   import { preloadHelmetCanvas, createConfettiBurst } from '$lib/client/theprogram/confetti.js';
+  import { cropHelmet } from '$lib/client/theprogram/helmetTrim.js';
 
   let { data } = $props();
 
@@ -1003,7 +1004,7 @@
           {#if s.helmet}
             <!-- alt="" — the school name is rendered as a sibling so the
                  helmet image is decorative and shouldn't be announced twice. -->
-            <img src={s.helmet} alt="" class="helmet" referrerpolicy="no-referrer" />
+            <img src={s.helmet} alt="" class="helmet" referrerpolicy="no-referrer" use:cropHelmet={s.helmet} />
           {:else}
             <div class="helmet helmet-placeholder" aria-hidden="true">{s.school[0] ?? '?'}</div>
           {/if}
@@ -1124,7 +1125,7 @@
           <div class="winner-card-wrap">
             <div class="winner-card">
               {#if stealerHelmet}
-                <img src={stealerHelmet} alt="" class="winner-img" referrerpolicy="no-referrer" />
+                <img src={stealerHelmet} alt="" class="winner-img" referrerpolicy="no-referrer" use:cropHelmet={stealerHelmet} />
               {:else}
                 <div class="winner-img helmet-placeholder" aria-hidden="true">{rollWinner[0] ?? '?'}</div>
               {/if}
@@ -1147,7 +1148,7 @@
           <div class="winner-card-wrap">
             <div class="winner-card">
               {#if winnerHelmet}
-                <img src={winnerHelmet} alt="" class="winner-img" referrerpolicy="no-referrer" />
+                <img src={winnerHelmet} alt="" class="winner-img" referrerpolicy="no-referrer" use:cropHelmet={winnerHelmet} />
               {:else}
                 <div class="winner-img helmet-placeholder" aria-hidden="true">{rollWinner[0] ?? '?'}</div>
               {/if}
@@ -1190,7 +1191,7 @@
           <div class="school-card ac-bidder">
             <div class="helmet-frame">
               {#if s.helmet}
-                <img src={s.helmet} alt="" class="helmet" referrerpolicy="no-referrer" />
+                <img src={s.helmet} alt="" class="helmet" referrerpolicy="no-referrer" use:cropHelmet={s.helmet} />
               {:else}
                 <div class="helmet helmet-placeholder" aria-hidden="true">{s.school[0] ?? '?'}</div>
               {/if}
@@ -1930,14 +1931,14 @@
     display: grid;
     place-items: center;
   }
-  /* Helmet fills the 1105/957 frame — `cover` crops to the centered
-     helmet rather than letterboxing it, so the image dominates the
-     tile. mix-blend-mode: multiply hides any light background bleed
-     against the cream card. */
+  /* The cropHelmet action trims transparent margins before paint, so
+     the source image's bbox is already tight to the logo. object-fit:
+     contain then keeps the whole helmet visible while the cropping
+     does the "fill the tile" work upstream. */
   .helmet {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     mix-blend-mode: multiply;
   }
@@ -2153,7 +2154,7 @@
   .winner-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     mix-blend-mode: multiply;
   }

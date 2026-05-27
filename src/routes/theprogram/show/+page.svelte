@@ -1860,7 +1860,7 @@
     background: var(--tp-crimson-wash);
     border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
-    padding: 6px 6px 10px;
+    padding: 12px 12px 14px;
     position: relative;
     transition: border-color 0.12s ease;
   }
@@ -1927,7 +1927,7 @@
     position: relative;
     width: 100%;
     aspect-ratio: 1105 / 957;
-    margin: 0 auto 4px;
+    margin: 0 auto 8px;
     display: grid;
     place-items: center;
   }
@@ -2134,7 +2134,7 @@
     border-radius: 6px;
     display: grid;
     place-items: center;
-    padding: 6px;
+    padding: 14px;
     /* Spec: an additional outer gold ring (4–6px) appears on the
        winning reveal — gold-on-cream contrast does the dramatic work.
        This is the layered border treatment (allowed), not a drop

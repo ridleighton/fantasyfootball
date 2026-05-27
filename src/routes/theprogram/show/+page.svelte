@@ -1399,11 +1399,12 @@
     text-align: center;
     max-width: 640px;
     width: 100%;
+    /* Layered border treatment: 1px rule, 8px crimson band, 1px gold
+       outer ring. Drop shadow removed per spec. */
     box-shadow:
       0 0 0 1px var(--tp-rule),
       0 0 0 8px var(--tp-navy),
-      0 0 0 9px var(--tp-gold),
-      0 30px 60px rgba(0, 0, 0, 0.4);
+      0 0 0 9px var(--tp-gold);
   }
   .stage-eyebrow {
     font-family: var(--tp-display-condensed);
@@ -1514,18 +1515,25 @@
     text-align: left;
     background: var(--tp-cream);
     color: var(--tp-navy);
-    border: 2px solid var(--tp-navy-dark);
+    border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
     padding: 14px 16px 16px;
     cursor: pointer;
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    transition: transform 0.1s ease, border-color 0.1s ease;
     font-family: var(--tp-body);
-    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
     position: relative;
+  }
+  .recruit-card::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid var(--tp-gold);
+    border-radius: 2px;
+    pointer-events: none;
   }
   .recruit-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3), 0 0 0 2px var(--tp-gold);
+    border-color: var(--tp-navy-dark);
   }
   /* Completed recruits get the darker crimson so the launcher reads
      "done vs not done" at a glance. */
@@ -1833,7 +1841,6 @@
     letter-spacing: 0.02em;
     border-radius: 2px;
     white-space: nowrap;
-    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
     z-index: 4;
   }
 
@@ -1849,23 +1856,29 @@
     width: 200px;
     text-align: center;
     background: var(--tp-cream);
-    border: 2px solid var(--tp-navy-dark);
+    border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
     padding: 18px 14px 14px;
-    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
     position: relative;
   }
-  /* Below-threshold schools — same white card. Helmet goes greyscale
-     + dimmed so eliminated schools read as "out"; the red X badge
-     reinforces the state. */
+  /* Inner gold rule — 1px solid gold inset 4px from the border. Creates
+     the "framed" feeling per spec. No drop shadow on cards. */
+  .school-card::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid var(--tp-gold);
+    border-radius: 2px;
+    pointer-events: none;
+  }
   .school-card.ineligible .school-name { color: var(--tp-navy-dark); }
   .school-card.ineligible .pct-bad { color: var(--tp-oxblood); }
   .school-card.ineligible .helmet { opacity: 0.35; filter: grayscale(1); }
+  /* Committed (in a steal) — the gold rule already does the framing,
+     deepen the outer border to crimson-ink so it reads as the "this
+     one is the current commit" card. */
   .school-card.committed {
-    border-color: var(--tp-gold);
-    box-shadow:
-      0 0 0 3px var(--tp-gold),
-      0 6px 0 rgba(0, 0, 0, 0.3);
+    border-color: var(--tp-navy-dark);
   }
   .committed-banner {
     position: absolute;
@@ -1885,13 +1898,15 @@
     text-transform: uppercase;
     border-radius: 2px;
     white-space: nowrap;
-    box-shadow: 0 2px 0 var(--tp-gold-2);
   }
 
+  /* Helmet area — ~1.3:1 aspect (wider than tall) per spec. The
+     card's content width (200px card - 28px padding) leaves ~172px;
+     at 1.3:1 the frame is ~172 × 132. */
   .helmet-frame {
     position: relative;
-    width: 180px;
-    height: 180px;
+    width: 100%;
+    aspect-ratio: 1.3 / 1;
     margin: 0 auto 12px;
     display: grid;
     place-items: center;
@@ -1916,12 +1931,13 @@
     width: 36px; height: 36px;
     background: var(--tp-navy);
     color: var(--tp-cream);
+    border: 1.5px solid var(--tp-gold);
     border-radius: 50%;
     display: grid; place-items: center;
     font-family: var(--tp-display);
     font-size: 22px;
     line-height: 1;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    z-index: 2;
   }
   .school-name {
     font-family: var(--tp-display-condensed);
@@ -1932,11 +1948,12 @@
     color: var(--tp-navy);
     margin-bottom: 4px;
   }
-  /* School-card text colors — cards are now white, so percentages and
-     labels go crimson / oxblood for contrast. */
-  .school-pct { font-family: var(--tp-display-condensed); color: var(--tp-navy-dark); letter-spacing: 0.04em; }
-  .pct-big { font-size: 28px; font-weight: 700; color: var(--tp-navy-dark); }
-  .pct-big small { font-size: 14px; color: var(--tp-muted); margin-left: 2px; }
+  /* School-card text colors — cream card, crimson percentages as the
+     "headline of the card" per spec. The school name is the support
+     label in crimson-ink. */
+  .school-pct { font-family: var(--tp-display); color: var(--tp-navy); letter-spacing: 0.02em; }
+  .pct-big { font-size: 36px; font-weight: 400; color: var(--tp-navy); }
+  .pct-big small { font-size: 16px; color: var(--tp-navy-dark); margin-left: 2px; }
   .pct-bad {
     color: var(--tp-oxblood);
     font-size: 13px;
@@ -2090,14 +2107,26 @@
     width: 280px;
     height: 280px;
     background: var(--tp-cream);
-    border: 2px solid var(--tp-navy-dark);
+    border: 2.5px solid var(--tp-navy);
     border-radius: 6px;
     display: grid;
     place-items: center;
     padding: 22px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
-    transform: scale(1.02);
+    /* Spec: an additional outer gold ring (4–6px) appears on the
+       winning reveal — gold-on-cream contrast does the dramatic work.
+       This is the layered border treatment (allowed), not a drop
+       shadow. */
+    box-shadow: 0 0 0 5px var(--tp-gold);
+    transform: scale(1.05);
     overflow: hidden;
+  }
+  .winner-card::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid var(--tp-gold);
+    border-radius: 3px;
+    pointer-events: none;
   }
   .winner-img {
     max-width: 100%;
@@ -2166,8 +2195,8 @@
     color: #111111;
   }
   @keyframes locked-pulse {
-    0%, 100% { box-shadow: 0 0 0 3px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3); }
-    50%      { box-shadow: 0 0 0 8px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3); }
+    0%, 100% { box-shadow: 0 0 0 3px var(--tp-gold); }
+    50%      { box-shadow: 0 0 0 8px var(--tp-gold); }
   }
   .helmet-frame .bars-overlay {
     position: absolute;

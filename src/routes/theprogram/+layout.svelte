@@ -85,9 +85,16 @@
     /* Pewter — outer trim, resting button border, disabled states */
     --tp-pewter: #BFB8AD;
     --tp-pewter-2: #8F8979;
+    --tp-pewter-deep: #9A968B;       /* spec: --pewter-deep, tertiary text */
     /* Oxblood — resting state for primary buttons (per spec) */
     --tp-oxblood: #4A0F14;
     --tp-oxblood-soft: #A03A47;
+    /* Tinted-surface washes for card states. Pre-blended low-alpha so
+       they read as faint tints on the cream page. */
+    --tp-crimson-wash: rgba(122, 24, 32, 0.07);   /* spec: --crimson-wash */
+    --tp-oxblood-wash: rgba(74, 15, 20, 0.06);    /* spec: --oxblood-wash */
+    /* Desaturated cream used for primary-resting button label. */
+    --tp-cream-mute: #D8C8A8;
     /* Ink */
     --tp-ink: #2B1815;
     --tp-ink-soft: #5B3F38;
@@ -354,6 +361,9 @@
   .tp-app :global(.tp-pill:hover:not(:disabled)) {
     background: var(--tp-cream-2);
     transform: translateY(-1px);
+    /* Spec: hover adds a gold outer ring (2-3px outline offset 2px). */
+    outline: 2px solid var(--tp-gold);
+    outline-offset: 2px;
   }
   /* Disabled — pewter border + pewter text on cream */
   .tp-app :global(.tp-pill:disabled) {
@@ -365,9 +375,28 @@
     text-shadow: none;
   }
 
+  /* Primary RESTING — patient pre-armed state. Oxblood fill, pewter
+     single ring, desaturated cream text. Reads as substantial but
+     not yet "lit up". Use .tp-pill-resting on a primary button when
+     the action isn't ready yet (form unfilled, prerequisite step). */
+  .tp-app :global(.tp-pill-resting) {
+    background: var(--tp-oxblood);
+    border: 1.5px solid var(--tp-pewter);
+    color: var(--tp-cream-mute);
+    letter-spacing: 0.28em;
+    box-shadow: none;
+    text-shadow: none;
+  }
+  .tp-app :global(.tp-pill-resting:hover:not(:disabled)) {
+    background: var(--tp-oxblood);
+    outline: 2px solid var(--tp-gold);
+    outline-offset: 2px;
+  }
+
   /* Primary ARMED. Crimson fill, 3px gold border, 3px pewter outer
      ring via box-shadow, cream text with the dimensional shadow
-     stack. Letter-spacing widened to 0.28em per spec (3–5px). */
+     stack. Letter-spacing widened to 0.28em per spec (3-5px). The
+     "lights up" moment. */
   .tp-app :global(.tp-pill-gold) {
     background: var(--tp-navy);
     border: 3px solid var(--tp-gold);
@@ -405,22 +434,30 @@
   }
 
   /* Form fields with notebook feel */
+  /* Form input — spec: cream-sunk fill, pewter border, crimson-ink
+     text. On focus: crimson border + 1px gold hairline rule 2px
+     below (notebook-underline pattern). */
   .tp-app :global(.tp-field) {
     display: block;
     width: 100%;
-    padding: 10px 12px;
-    background: rgba(244, 236, 221, 0.5);
-    border: 1px solid var(--tp-rule);
-    border-radius: 4px;
-    color: var(--tp-ink);
+    padding: 8px 12px;
+    background: var(--tp-cream-2);
+    border: 1px solid var(--tp-pewter);
+    border-radius: 3px;
+    color: var(--tp-navy-dark);
     font-family: var(--tp-body);
     font-size: 15px;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tp-app :global(.tp-field:hover) {
+    border-color: var(--tp-navy-dark);
   }
   .tp-app :global(.tp-field:focus) {
     outline: none;
-    border-color: var(--tp-gold-2);
-    box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.3);
+    border-color: var(--tp-navy);
     background: var(--tp-cream);
+    /* Notebook-underline gold hairline 2px below the field. */
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
   }
   .tp-app :global(.tp-label) {
     display: block;

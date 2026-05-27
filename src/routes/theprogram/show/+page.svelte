@@ -1511,15 +1511,17 @@
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 14px;
   }
+  /* Recruit launcher tile — ACTIVE state per spec when not yet rolled
+     (crimson-wash + crimson border + gold inner rule). */
   .recruit-card {
     text-align: left;
-    background: var(--tp-cream);
+    background: var(--tp-crimson-wash);
     color: var(--tp-navy);
     border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
     padding: 14px 16px 16px;
     cursor: pointer;
-    transition: transform 0.1s ease, border-color 0.1s ease;
+    transition: transform 0.1s ease, border-color 0.12s ease, background 0.12s ease;
     font-family: var(--tp-body);
     position: relative;
   }
@@ -1530,21 +1532,24 @@
     border: 1px solid var(--tp-gold);
     border-radius: 2px;
     pointer-events: none;
+    transition: border-color 0.12s ease;
   }
-  .recruit-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--tp-navy-dark);
-  }
-  /* Completed recruits get the darker crimson so the launcher reads
-     "done vs not done" at a glance. */
+  .recruit-card:hover { transform: translateY(-2px); }
+  /* DONE = "default / completed" state per spec: cream surface, 1.5px
+     pewter border, no gold inner rule, contents at 0.7 opacity so the
+     done tile recedes against the active ones. */
   .recruit-card.done {
-    background: var(--tp-navy-dark);
-    color: var(--tp-cream);
-    border-color: var(--tp-navy-dark);
+    background: var(--tp-cream);
+    border: 1.5px solid var(--tp-pewter);
+    color: var(--tp-navy-dark);
+    cursor: pointer;
   }
+  .recruit-card.done::after { border-color: transparent; }
   .recruit-card.done :global(.recruit-player),
-  .recruit-card.done :global(.recruit-num) {
-    color: var(--tp-cream);
+  .recruit-card.done :global(.recruit-num),
+  .recruit-card.done :global(.recruit-status) {
+    opacity: 0.7;
+    color: var(--tp-navy-dark);
   }
   .recruit-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .recruit-num {
@@ -1845,17 +1850,19 @@
     gap: 24px;
     margin: 12px 0 36px;
   }
+  /* School card — "active / pending" state per spec.
+     Crimson-wash background, 2.5px crimson border, 1px gold inner rule
+     inset 4px (the "framed" look). No drop shadow on cards. */
   .school-card {
     width: 240px;
     text-align: center;
-    background: var(--tp-cream);
+    background: var(--tp-crimson-wash);
     border: 2.5px solid var(--tp-navy);
     border-radius: 4px;
     padding: 14px 10px 14px;
     position: relative;
+    transition: border-color 0.12s ease;
   }
-  /* Inner gold rule — 1px solid gold inset 4px from the border. Creates
-     the "framed" feeling per spec. No drop shadow on cards. */
   .school-card::after {
     content: '';
     position: absolute;
@@ -1863,15 +1870,34 @@
     border: 1px solid var(--tp-gold);
     border-radius: 2px;
     pointer-events: none;
+    transition: border-color 0.12s ease;
   }
-  .school-card.ineligible .school-name { color: var(--tp-navy-dark); }
-  .school-card.ineligible .pct-bad { color: var(--tp-oxblood); }
+  /* Threshold-grayed (below-cut) — dim the contents per spec, but
+     the X badge stays full opacity. CSS `opacity` cascades to
+     children, so we dim each text/image child individually instead
+     of dimming the parent. */
+  .school-card.ineligible { border-color: var(--tp-pewter); }
+  .school-card.ineligible::after { border-color: var(--tp-pewter); }
   .school-card.ineligible .helmet { opacity: 0.35; filter: grayscale(1); }
-  /* Committed (in a steal) — the gold rule already does the framing,
-     deepen the outer border to crimson-ink so it reads as the "this
-     one is the current commit" card. */
+  .school-card.ineligible .school-name,
+  .school-card.ineligible .school-pct,
+  .school-card.ineligible .pct-big,
+  .school-card.ineligible .pct-bad { opacity: 0.55; }
+  /* Committed-in-a-steal — the original committed school sits in a
+     stronger crimson outline so it reads as "this one's the current
+     commit, in jeopardy". */
   .school-card.committed {
     border-color: var(--tp-navy-dark);
+  }
+  /* LOCKED — the locked-steal outcome turns the committed card into
+     the oxblood-bordered locked state. Inner gold rule retreats; the
+     LOCKED rect-stamp does the dramatic work. */
+  .schools-locked .school-card.committed {
+    background: var(--tp-oxblood-wash);
+    border-color: var(--tp-oxblood);
+  }
+  .schools-locked .school-card.committed::after {
+    border-color: transparent;
   }
   .committed-banner {
     position: absolute;

@@ -1660,7 +1660,7 @@
     font-weight: 700;
     font-size: 13px;
     letter-spacing: 0.2em;
-    color: var(--tp-gold-soft);
+    color: var(--tp-navy-dark);
     text-transform: uppercase;
   }
   /* Top-bar pills inherit the layout's .tp-pill secondary style now —

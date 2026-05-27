@@ -1638,10 +1638,10 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    color: var(--tp-cream);
+    color: var(--tp-navy-dark);
     font-family: var(--tp-display-condensed);
   }
-  .event-sep { color: rgba(244, 236, 221, 0.4); }
+  .event-sep { color: var(--tp-navy-dark); opacity: 0.55; }
   .event-prog {
     font-weight: 700;
     font-size: 13px;

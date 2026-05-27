@@ -27,7 +27,7 @@
       <span class="tp-stack-small">The</span>
       <span class="tp-stack-big tp-stamped">Program</span>
     </h1>
-    <div class="entry-week-stamp tp-stamped" style="font-size:48px;font-family:var(--tp-display);letter-spacing:0.04em;">
+    <div class="entry-week-stamp" style="font-size:48px;font-family:var(--tp-display);letter-spacing:0.04em;color:var(--tp-navy);">
       Week {weekNumber || '—'}
     </div>
 

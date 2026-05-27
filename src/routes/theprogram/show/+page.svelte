@@ -1817,20 +1817,22 @@
   }
 
   /* "Now you're interested?" pre-roll tag on late-joiner school cards */
+  /* Spec: "Bruh… now you're interested?" — italic Lora/Georgia in
+     crimson-ink, no dimensional treatment, no card fill. Quiet and
+     dry above the helmet. */
   .late-banner {
     position: absolute;
-    top: -16px;
+    top: -8px;
     left: 50%;
-    transform: translateX(-50%) rotate(-3deg);
-    background: var(--tp-oxblood);
-    color: var(--tp-gold-soft);
-    padding: 4px 10px;
+    transform: translateX(-50%);
+    background: transparent;
+    color: var(--tp-navy-dark);
+    padding: 0;
     font-family: var(--tp-body);
     font-style: italic;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    border-radius: 2px;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0;
     white-space: nowrap;
     z-index: 4;
   }

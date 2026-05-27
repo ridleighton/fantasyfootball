@@ -1596,10 +1596,10 @@
   .launcher-jump { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .jump-pill {
     padding: 8px 14px;
-    background: var(--tp-navy);
-    border: 1px solid var(--tp-navy-dark);
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-navy);
     border-radius: 999px;
-    color: var(--tp-cream);
+    color: var(--tp-navy);
     font-family: var(--tp-display-condensed);
     font-size: 12px;
     font-weight: 700;
@@ -1610,11 +1610,11 @@
     align-items: center;
     gap: 8px;
   }
-  .jump-pill:hover { background: var(--tp-navy-2); }
+  .jump-pill:hover { background: var(--tp-cream-2); }
   .jump-pill.active {
-    background: var(--tp-gold);
-    color: var(--tp-navy-dark);
-    border-color: var(--tp-gold-2);
+    background: var(--tp-navy);
+    color: var(--tp-cream);
+    border-color: var(--tp-gold);
   }
   .jump-prog { font-size: 11px; opacity: 0.7; }
 
@@ -1657,32 +1657,23 @@
     color: var(--tp-gold-soft);
     text-transform: uppercase;
   }
-  .event-topbar :global(.tp-pill) {
-    background: var(--tp-navy);
-    color: var(--tp-cream);
-    border-color: var(--tp-navy-dark);
-  }
-  .event-topbar :global(.tp-pill:hover:not(:disabled)) {
-    background: var(--tp-navy-2);
-    box-shadow: none;
-    transform: none;
-  }
+  /* Top-bar pills inherit the layout's .tp-pill secondary style now —
+     cream fill, crimson border, crimson text. No scoped override
+     needed. */
   .edit-btn {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: var(--tp-gold);
-    border: 1px solid var(--tp-gold-2);
-    color: var(--tp-navy-dark);
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-navy);
+    color: var(--tp-navy);
     font-size: 16px;
     cursor: pointer;
     display: grid;
     place-items: center;
   }
   .edit-btn:hover {
-    background: var(--tp-gold-soft);
-    color: var(--tp-navy-dark);
-    border-color: var(--tp-gold-2);
+    background: var(--tp-cream-2);
   }
 
   .event-head { position: relative; text-align: center; margin-bottom: 32px; z-index: 4; }
@@ -2388,15 +2379,9 @@
   .control-row {
     display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center;
   }
-  .control-row :global(.tp-pill:not(.tp-pill-gold)) {
-    background: var(--tp-navy);
-    color: var(--tp-cream);
-    border-color: var(--tp-navy-dark);
-  }
-  .control-row :global(.tp-pill:not(.tp-pill-gold):hover:not(:disabled)) {
-    background: var(--tp-navy-2);
-    box-shadow: none;
-  }
+  /* Control-row secondary pills inherit layout .tp-pill (cream / crimson
+     border / crimson text). Paired beside the .tp-pill-gold primary
+     for the clear secondary -> armed-primary read. */
   .prev-note { color: var(--tp-oxblood); font-style: italic; margin-bottom: 14px; font-size: 18px; }
   .prev-note b {
     color: #111111;
@@ -2409,8 +2394,9 @@
   .roll-btn {
     font-size: 24px;
     padding: 22px 72px;
-    letter-spacing: 0.28em;
-    box-shadow: inset 0 -3px 0 var(--tp-gold-2), 0 6px 24px rgba(217, 164, 65, 0.4);
+    letter-spacing: 0.32em;
+    /* tp-pill-gold (armed) already provides crimson fill + gold border +
+       pewter outer ring + dimensional text. roll-btn just sizes up. */
   }
   .event-alert { max-width: 480px; margin: 0 auto 16px; }
 

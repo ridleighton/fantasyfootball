@@ -319,7 +319,16 @@
        0  6px 0 rgba(0, 0, 0, 0.18);
   }
 
-  /* Pill buttons */
+  /* ============================================================
+     Pill buttons per canonical spec
+     ------------------------------------------------------------
+     .tp-pill       — secondary (cream / crimson border / crimson)
+     .tp-pill-gold  — primary ARMED (crimson fill, gold border + outer
+                      pewter ring, cream text with dimensional shadow,
+                      letter-spacing widened — "lights up")
+     .tp-pill-navy  — solid crimson alt (no halo)
+     :disabled      — pewter border + pewter text, cream fill
+     ============================================================ */
   .tp-app :global(.tp-pill) {
     display: inline-flex;
     align-items: center;
@@ -334,27 +343,40 @@
     text-decoration: none;
     border-radius: 999px;
     cursor: pointer;
-    border: 1.5px solid var(--tp-navy);
+    border: 1px solid var(--tp-navy);
     background: var(--tp-cream);
     color: var(--tp-navy);
-    transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
+    transition: transform 0.08s ease, background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
   .tp-app :global(.tp-pill:hover:not(:disabled)) {
     background: var(--tp-cream-2);
-    box-shadow: 0 2px 0 var(--tp-navy);
     transform: translateY(-1px);
   }
-  .tp-app :global(.tp-pill:disabled) { opacity: 0.45; cursor: not-allowed; }
+  /* Disabled — pewter border + pewter text on cream */
+  .tp-app :global(.tp-pill:disabled) {
+    background: var(--tp-cream);
+    border-color: var(--tp-pewter);
+    color: var(--tp-pewter);
+    cursor: not-allowed;
+    box-shadow: none;
+    text-shadow: none;
+  }
 
+  /* Primary ARMED. Crimson fill, 3px gold border, 3px pewter outer
+     ring via box-shadow, cream text with the dimensional shadow
+     stack. Letter-spacing widened to 0.28em per spec (3–5px). */
   .tp-app :global(.tp-pill-gold) {
-    background: var(--tp-gold);
-    border-color: var(--tp-gold-2);
-    color: var(--tp-navy-dark);
-    box-shadow: inset 0 -2px 0 var(--tp-gold-2);
+    background: var(--tp-navy);
+    border: 3px solid var(--tp-gold);
+    color: var(--tp-cream);
+    letter-spacing: 0.28em;
+    box-shadow: 0 0 0 3px var(--tp-pewter);
+    text-shadow:
+      1px 1px 0 var(--tp-gold),
+      2px 2px 0 var(--tp-pewter-2);
   }
   .tp-app :global(.tp-pill-gold:hover:not(:disabled)) {
-    background: var(--tp-gold-soft);
-    box-shadow: 0 3px 0 var(--tp-gold-2), inset 0 -2px 0 var(--tp-gold-2);
+    background: var(--tp-navy-2);
   }
   .tp-app :global(.tp-pill-navy) {
     background: var(--tp-navy);

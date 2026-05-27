@@ -25,7 +25,18 @@
     sepia: 'Sepia · vintage leather',
     charcoal: 'Charcoal · neutral dark',
     forest: 'Forest · gridiron green',
-    bordeaux: 'Bordeaux · deep wine'
+    bordeaux: 'Bordeaux · deep wine',
+    // Light tan / cream family — flat solid colors. Cream cards + cream
+    // text will lose contrast on these; useful for comparing the warm /
+    // light direction.
+    tan: 'Tan · #DCC3AA',
+    cream: 'Cream · #F1E2D1',
+    ivory: 'Ivory · #FFFDE1',
+    wheat: 'Wheat · #E6CFA9',
+    honey: 'Honey · #E8C999',
+    beige: 'Beige · #F1E3D3',
+    parchment: 'Parchment · #E5D0AC',
+    coffee: 'Coffee · #AF8260'
   };
 
   // Build a pill URL that preserves every other query param on the page
@@ -86,7 +97,12 @@
   <div class="tp-bg-picker" aria-label="Background variant picker">
     <div class="tp-bg-picker-label">Backdrop · {variantLabels[bgVariant] ?? variantLabels['']}</div>
     <div class="tp-bg-picker-buttons">
-      {#each [['', 'Default'], ['soft', 'Soft'], ['sepia', 'Sepia'], ['charcoal', 'Charcoal'], ['forest', 'Forest'], ['bordeaux', 'Bordeaux']] as [v, label]}
+      {#each [
+        ['', 'Default'], ['soft', 'Soft'], ['sepia', 'Sepia'],
+        ['charcoal', 'Charcoal'], ['forest', 'Forest'], ['bordeaux', 'Bordeaux'],
+        ['tan', 'Tan'], ['cream', 'Cream'], ['ivory', 'Ivory'], ['wheat', 'Wheat'],
+        ['honey', 'Honey'], ['beige', 'Beige'], ['parchment', 'Parchment'], ['coffee', 'Coffee']
+      ] as [v, label]}
         <a
           class="tp-bg-pill"
           class:active={bgVariant === v}
@@ -204,6 +220,18 @@
         rgba(50, 10, 22, 0.82) 100%),
       #1a060e;
   }
+  /* Light tan / cream family — flat solid colors per request. These
+     will desaturate the cream school cards and cream player text,
+     so card / typography colors would need adjusting if one is chosen
+     as the final default. */
+  .tp-app[data-bg="tan"]       { --tp-stage-bg: #DCC3AA; }
+  .tp-app[data-bg="cream"]     { --tp-stage-bg: #F1E2D1; }
+  .tp-app[data-bg="ivory"]     { --tp-stage-bg: #FFFDE1; }
+  .tp-app[data-bg="wheat"]     { --tp-stage-bg: #E6CFA9; }
+  .tp-app[data-bg="honey"]     { --tp-stage-bg: #E8C999; }
+  .tp-app[data-bg="beige"]     { --tp-stage-bg: #F1E3D3; }
+  .tp-app[data-bg="parchment"] { --tp-stage-bg: #E5D0AC; }
+  .tp-app[data-bg="coffee"]    { --tp-stage-bg: #AF8260; }
 
   /* Floating dev picker — sits in the bottom-right so it doesn't
      intrude on the show layout. Remove this block when a variant

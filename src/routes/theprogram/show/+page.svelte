@@ -1645,12 +1645,12 @@
     text-transform: uppercase;
   }
   .event-topbar :global(.tp-pill) {
-    background: rgba(244, 236, 221, 0.1);
+    background: var(--tp-navy);
     color: var(--tp-cream);
-    border-color: rgba(244, 236, 221, 0.3);
+    border-color: var(--tp-navy-dark);
   }
   .event-topbar :global(.tp-pill:hover:not(:disabled)) {
-    background: rgba(244, 236, 221, 0.18);
+    background: var(--tp-navy-2);
     box-shadow: none;
     transform: none;
   }
@@ -1658,16 +1658,16 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(244, 236, 221, 0.1);
-    border: 1px solid rgba(244, 236, 221, 0.3);
-    color: var(--tp-gold-soft);
+    background: var(--tp-gold);
+    border: 1px solid var(--tp-gold-2);
+    color: var(--tp-navy-dark);
     font-size: 16px;
     cursor: pointer;
     display: grid;
     place-items: center;
   }
   .edit-btn:hover {
-    background: var(--tp-gold);
+    background: var(--tp-gold-soft);
     color: var(--tp-navy-dark);
     border-color: var(--tp-gold-2);
   }
@@ -1714,14 +1714,8 @@
     padding: 14px 28px;
     text-align: center;
     position: relative;
-    /* Fully opaque parchment so the #111 stamp ink stays at full
-       contrast regardless of card color underneath. Previously was
-       0.22 alpha which blended to ~#A12827 on crimson cards — ink
-       contrast dropped to ~3.5:1 and the .stamp-sub failed AA. */
-    background: rgba(244, 220, 160, 0.95);
-    box-shadow:
-      inset 0 0 0 3px currentColor,
-      0 4px 24px rgba(0, 0, 0, 0.45);
+    background: transparent;
+    box-shadow: inset 0 0 0 3px currentColor;
   }
   .rect-stamp .stamp-label {
     font-family: 'Bebas Neue', 'Oswald', sans-serif;
@@ -2196,6 +2190,18 @@
   .steal-message.locked  { animation-delay: 1.2s; }
   .steal-message.stayed  { animation-delay: 2.0s; }
   .steal-message.stolen  { animation-delay: 1.5s; }
+  /* Per-variant accent on the bolded names — black ink for the
+     dramatic outcomes (locked / stolen), warm crimson for the loyal
+     outcome. Overrides the layout's navy-dark default. */
+  .steal-message.stolen :global(strong),
+  .steal-message.locked :global(strong) {
+    color: #111111;
+    text-decoration-color: var(--tp-navy);
+  }
+  .steal-message.stayed :global(strong) {
+    color: var(--tp-oxblood);
+    text-decoration-color: var(--tp-gold);
+  }
   .steal-message strong {
     font-style: normal;
     font-family: var(--tp-display-condensed);
@@ -2331,12 +2337,12 @@
     display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center;
   }
   .control-row :global(.tp-pill:not(.tp-pill-gold)) {
-    background: rgba(244, 236, 221, 0.12);
+    background: var(--tp-navy);
     color: var(--tp-cream);
-    border-color: rgba(244, 236, 221, 0.4);
+    border-color: var(--tp-navy-dark);
   }
   .control-row :global(.tp-pill:not(.tp-pill-gold):hover:not(:disabled)) {
-    background: rgba(244, 236, 221, 0.2);
+    background: var(--tp-navy-2);
     box-shadow: none;
   }
   .prev-note { color: rgba(244, 236, 221, 0.78); font-style: italic; margin-bottom: 14px; font-size: 14px; }

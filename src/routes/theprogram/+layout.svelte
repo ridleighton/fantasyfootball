@@ -27,6 +27,16 @@
     navy: 'Navy · cool storm',
     curtain: 'Curtain · gold-to-deep-crimson'
   };
+
+  // Build a pill URL that preserves every other query param on the page
+  // (e.g. ?conf=C1&i=0) and just swaps/clears the bg key.
+  function bgHref(value) {
+    const params = new URLSearchParams($page.url.searchParams);
+    if (value) params.set('bg', value);
+    else params.delete('bg');
+    const qs = params.toString();
+    return $page.url.pathname + (qs ? `?${qs}` : '');
+  }
 </script>
 
 <svelte:head>
@@ -80,9 +90,8 @@
         <a
           class="tp-bg-pill"
           class:active={bgVariant === v}
-          href={`${$page.url.pathname}${v ? `?bg=${v}` : ''}${
-            v ? '' : ''
-          }`}
+          href={bgHref(v)}
+          data-sveltekit-noscroll
         >{label}</a>
       {/each}
     </div>

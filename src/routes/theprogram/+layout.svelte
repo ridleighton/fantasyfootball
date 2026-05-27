@@ -19,6 +19,8 @@
   //   ?bg=navy      — cool storm blue
   //   ?bg=curtain   — gold-to-deep-crimson stage curtain vignette
   const bgVariant = $derived($page.url.searchParams.get('bg') ?? '');
+  const lightBgs = new Set(['tan', 'cream', 'ivory', 'wheat', 'honey', 'beige', 'parchment', 'coffee']);
+  const isLightBg = $derived(lightBgs.has(bgVariant));
   const variantLabels = {
     '': 'Default · dark crimson',
     soft: 'Soft · muted crimson',
@@ -60,7 +62,7 @@
   />
 </svelte:head>
 
-<div class="tp-app" data-bg={bgVariant}>
+<div class="tp-app" data-bg={bgVariant} data-light={isLightBg ? '1' : '0'}>
   {#if showNav}
     <nav class="tp-nav">
       <div class="tp-nav-inner">
@@ -232,6 +234,85 @@
   .tp-app[data-bg="beige"]     { --tp-stage-bg: #F1E3D3; }
   .tp-app[data-bg="parchment"] { --tp-stage-bg: #E5D0AC; }
   .tp-app[data-bg="coffee"]    { --tp-stage-bg: #AF8260; }
+
+  /* ============================================================
+     Light-backdrop theme inversion.
+     When any of the eight light variants is active, .tp-app gets
+     data-light="1" and the rules below flip card surfaces, card
+     text, floating text, and the player-name stamp so the show
+     reads cohesively on a light field.
+     ============================================================ */
+  .tp-app[data-light="1"] :global(.school-card),
+  .tp-app[data-light="1"] :global(.winner-card),
+  .tp-app[data-light="1"] :global(.recruit-card),
+  .tp-app[data-light="1"] :global(.stage-card) {
+    background: var(--tp-navy-dark);
+    color: var(--tp-cream);
+    border-color: var(--tp-navy-dark);
+  }
+  /* Text inside cards: navy → cream */
+  .tp-app[data-light="1"] :global(.school-name),
+  .tp-app[data-light="1"] :global(.pct-big),
+  .tp-app[data-light="1"] :global(.recruit-player),
+  .tp-app[data-light="1"] :global(.recruit-num) {
+    color: var(--tp-cream);
+  }
+  /* Helmet placeholder background */
+  .tp-app[data-light="1"] :global(.helmet-placeholder) {
+    background: rgba(244, 236, 221, 0.08);
+    color: rgba(244, 236, 221, 0.5);
+  }
+  /* Stamped-cream display text (player + winner name): cream → navy
+     fill, same outline stack so it still reads as a stamped headline. */
+  .tp-app[data-light="1"] :global(.tp-stamped-cream) {
+    color: var(--tp-navy);
+    text-shadow:
+      -1px -1px 0 var(--tp-gold),
+       1px -1px 0 var(--tp-gold),
+      -1px  1px 0 var(--tp-gold),
+       1px  1px 0 var(--tp-gold),
+      -2px -2px 0 var(--tp-pewter-2),
+       2px -2px 0 var(--tp-pewter-2),
+      -2px  2px 0 var(--tp-pewter-2),
+       2px  2px 0 var(--tp-pewter-2),
+       0  4px 0 rgba(0, 0, 0, 0.3),
+       0  8px 24px rgba(0, 0, 0, 0.25);
+  }
+  /* Floating prose on the backdrop: cream → navy */
+  .tp-app[data-light="1"] :global(.spinner-label),
+  .tp-app[data-light="1"] :global(.steal-message),
+  .tp-app[data-light="1"] :global(.ac-solo-line),
+  .tp-app[data-light="1"] :global(.ac-phase2-prompt),
+  .tp-app[data-light="1"] :global(.stage-sub),
+  .tp-app[data-light="1"] :global(.launcher-sub),
+  .tp-app[data-light="1"] :global(.prev-note) {
+    color: var(--tp-navy);
+    text-shadow: none;
+  }
+  /* Bold runs inside messages keep gold so the names pop */
+  .tp-app[data-light="1"] :global(.steal-message strong),
+  .tp-app[data-light="1"] :global(.ac-solo-line strong) {
+    color: var(--tp-gold-2);
+  }
+  /* Eyebrows + small caps labels: keep gold (already legible on light) */
+  /* Recruit status pending was muted cream — bump to navy on light bg */
+  .tp-app[data-light="1"] :global(.recruit-status.pending) {
+    color: var(--tp-navy);
+  }
+  /* Control-row "secondary" pills used cream-on-translucent — invert
+     so they read on a light field. */
+  .tp-app[data-light="1"] :global(.control-row .tp-pill:not(.tp-pill-gold)) {
+    background: rgba(0, 0, 0, 0.18);
+    color: var(--tp-navy);
+    border-color: rgba(0, 0, 0, 0.35);
+  }
+  /* Edit modal — dark surface looks cohesive against light backdrop */
+  .tp-app[data-light="1"] :global(.edit-modal) {
+    background: var(--tp-navy-dark);
+    color: var(--tp-cream);
+  }
+  .tp-app[data-light="1"] :global(.edit-title) { color: var(--tp-cream); }
+  .tp-app[data-light="1"] :global(.edit-eyebrow) { color: var(--tp-gold-soft); }
 
   /* Floating dev picker — sits in the bottom-right so it doesn't
      intrude on the show layout. Remove this block when a variant

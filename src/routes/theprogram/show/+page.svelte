@@ -1532,6 +1532,11 @@
   .recruit-card.done {
     background: var(--tp-navy-dark);
     color: var(--tp-cream);
+    border-color: var(--tp-navy-dark);
+  }
+  .recruit-card.done :global(.recruit-player),
+  .recruit-card.done :global(.recruit-num) {
+    color: var(--tp-cream);
   }
   .recruit-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .recruit-num {
@@ -1850,11 +1855,10 @@
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
     position: relative;
   }
-  /* Below-threshold ("greyed out") schools — light-pink wash over the
-     crimson base. Text on this surface flips to ink + oxblood for
-     contrast (cream + gold-soft were washed out on the pink). */
-  .school-card.ineligible { background: rgba(244, 236, 221, 0.55); }
-  .school-card.ineligible .school-name { color: var(--tp-ink); }
+  /* Below-threshold ("invalid") schools — same white card; the red X
+     badge in the corner is the sole "out" indicator. Don't grey the
+     helmet, don't tint the card. */
+  .school-card.ineligible .school-name { color: var(--tp-navy-dark); }
   .school-card.ineligible .pct-bad { color: var(--tp-oxblood); }
   .school-card.committed {
     border-color: var(--tp-gold);
@@ -1885,19 +1889,26 @@
 
   .helmet-frame {
     position: relative;
-    width: 140px;
-    height: 140px;
+    width: 180px;
+    height: 180px;
     margin: 0 auto 12px;
     display: grid;
     place-items: center;
   }
-  .helmet { max-width: 100%; max-height: 100%; object-fit: contain; }
+  /* mix-blend-mode: multiply on a white card hides any white background
+     bleed around the helmet PNG so the logo dominates the tile. */
+  .helmet {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    mix-blend-mode: multiply;
+  }
   .helmet-placeholder {
     width: 100%; height: 100%; display: grid; place-items: center;
-    background: var(--tp-cream-2); color: var(--tp-muted);
-    font-family: var(--tp-display); font-size: 56px; border-radius: 4px;
+    background: transparent; color: var(--tp-muted);
+    font-family: var(--tp-display); font-size: 72px;
+    mix-blend-mode: normal;
   }
-  .ineligible .helmet { opacity: 0.3; filter: grayscale(1); }
   .x-badge {
     position: absolute;
     top: 4px; right: 4px;
@@ -1920,16 +1931,13 @@
     color: var(--tp-navy);
     margin-bottom: 4px;
   }
-  /* School-card text colors are overridden by the layout's
-     :global(.school-card) cream block, but keep these as fallback
-     defaults for any contexts that aren't on a crimson card. */
-  .school-pct { font-family: var(--tp-display-condensed); color: var(--tp-cream); letter-spacing: 0.04em; }
-  .pct-big { font-size: 28px; font-weight: 700; color: var(--tp-cream); }
-  .pct-big small { font-size: 14px; color: rgba(244, 236, 221, 0.7); margin-left: 2px; }
-  /* "Below cut" label — was oxblood on crimson (1.6:1, invisible).
-     Switched to gold-soft (~5:1 on crimson). */
+  /* School-card text colors — cards are now white, so percentages and
+     labels go crimson / oxblood for contrast. */
+  .school-pct { font-family: var(--tp-display-condensed); color: var(--tp-navy-dark); letter-spacing: 0.04em; }
+  .pct-big { font-size: 28px; font-weight: 700; color: var(--tp-navy-dark); }
+  .pct-big small { font-size: 14px; color: var(--tp-muted); margin-left: 2px; }
   .pct-bad {
-    color: var(--tp-gold-soft);
+    color: var(--tp-oxblood);
     font-size: 13px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -2090,7 +2098,12 @@
     transform: scale(1.02);
     overflow: hidden;
   }
-  .winner-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .winner-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    mix-blend-mode: multiply;
+  }
   .bars-overlay {
     position: absolute;
     inset: 0;
@@ -2345,7 +2358,7 @@
     background: var(--tp-navy-2);
     box-shadow: none;
   }
-  .prev-note { color: var(--tp-oxblood); font-style: italic; margin-bottom: 14px; font-size: 14px; }
+  .prev-note { color: var(--tp-oxblood); font-style: italic; margin-bottom: 14px; font-size: 18px; }
   .prev-note b {
     color: #111111;
     font-style: normal;

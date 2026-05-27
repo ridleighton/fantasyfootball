@@ -115,19 +115,19 @@
   .tp-app :global(.school-card),
   .tp-app :global(.winner-card),
   .tp-app :global(.recruit-card) {
-    background: var(--tp-navy);
-    color: var(--tp-cream);
-    border-color: var(--tp-navy-dark);
+    background: var(--tp-cream);
+    color: var(--tp-navy-dark);
+    border-color: var(--tp-navy);
   }
   .tp-app :global(.school-name),
   .tp-app :global(.pct-big),
   .tp-app :global(.recruit-player),
   .tp-app :global(.recruit-num) {
-    color: var(--tp-cream);
+    color: var(--tp-navy-dark);
   }
   .tp-app :global(.helmet-placeholder) {
-    background: rgba(244, 236, 221, 0.08);
-    color: rgba(244, 236, 221, 0.55);
+    background: transparent;
+    color: var(--tp-muted);
   }
   /* Player-name + winner-name + launcher headlines: solid crimson on
      the wheat backdrop. Drop the gold + pewter outline stack — wheat

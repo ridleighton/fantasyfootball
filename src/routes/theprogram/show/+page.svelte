@@ -1481,7 +1481,7 @@
     font-size: 12px;
     letter-spacing: 0.4em;
     text-transform: uppercase;
-    color: var(--tp-gold-soft);
+    color: var(--tp-navy-dark);
     margin-bottom: 10px;
   }
   .launcher-title {
@@ -1498,7 +1498,7 @@
     font-size: 13px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--tp-gold-soft);
+    color: var(--tp-navy-dark);
   }
   .launcher-sub { color: rgba(244, 236, 221, 0.78); font-style: italic; margin: 0; }
 

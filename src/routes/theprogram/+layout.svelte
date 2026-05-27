@@ -80,7 +80,9 @@
     /* Ink */
     --tp-ink: #2B1815;
     --tp-ink-soft: #5B3F38;
-    --tp-muted: #7A6A55;
+    /* Was #7A6A55 — only 3.6:1 on wheat. Darkened so labels and
+       captions pass AA 4.5:1 on the wheat backdrop. */
+    --tp-muted: #5A4A35;
     /* Rules */
     --tp-rule: rgba(184, 37, 44, 0.28);
     --tp-rule-soft: rgba(184, 37, 44, 0.12);
@@ -137,8 +139,11 @@
       0 2px 0 var(--tp-navy-dark),
       0 6px 18px rgba(0, 0, 0, 0.18);
   }
-  /* Floating prose on the backdrop becomes crimson so it reads on
-     wheat. Bold school names inside messages stay gold for emphasis. */
+  /* Floating prose on the wheat backdrop. Crimson (#B8252C) is only
+     4.1:1 on wheat — passes 3:1 large-text but fails 4.5:1 body.
+     Switched body-weight prose to navy-dark (#8C1B22) which is ~7:1.
+     Bold school names go navy-dark too (gold/gold-2 vanished on wheat
+     at 1.5–2.9:1). */
   .tp-app :global(.spinner-label),
   .tp-app :global(.steal-message),
   .tp-app :global(.ac-solo-line),
@@ -146,15 +151,18 @@
   .tp-app :global(.stage-sub),
   .tp-app :global(.launcher-sub),
   .tp-app :global(.prev-note) {
-    color: var(--tp-navy);
+    color: var(--tp-navy-dark);
     text-shadow: none;
   }
   .tp-app :global(.steal-message strong),
   .tp-app :global(.ac-solo-line strong) {
-    color: var(--tp-gold-2);
+    color: var(--tp-navy-dark);
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
   }
   .tp-app :global(.recruit-status.pending) {
-    color: var(--tp-navy);
+    color: var(--tp-navy-dark);
   }
   /* Secondary translucent pills in the control row — invert so
      they read on the wheat field. */
@@ -173,6 +181,39 @@
 
   .tp-app :global(*) { box-sizing: border-box; }
 
+  /* Visually-hidden utility for screen-reader-only content. */
+  .tp-app :global(.sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ============================================================
+     prefers-reduced-motion: cancel the heaviest animations.
+     The CSS-driven animations (helmet spin, slam keyframes, megaphone
+     burst, locked-pulse, ring-pulse, bars-drop, scale-in, fade
+     transitions) all collapse to instant for users who request less
+     motion. The JS-driven RAF loops (spin loop deceleration, confetti
+     burst, megaphone particles) gate themselves via the matchMedia
+     query in performRoll / spawnMegaphoneParticles / startSpinLoop.
+     ============================================================ */
+  @media (prefers-reduced-motion: reduce) {
+    .tp-app :global(*),
+    .tp-app :global(*::before),
+    .tp-app :global(*::after) {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* Headings — keep specificity at 0 so per-page color wins */
   .tp-app :global(:where(h1, h2, h3)) {
     font-family: var(--tp-display-condensed);
@@ -181,10 +222,13 @@
     margin: 0;
   }
 
-  /* Stamps — week numbers, conference badges */
+  /* Stamps — week numbers, conference badges. Sized to qualify as
+     "large bold text" (≥14px / 700) so the navy-dark-on-gold variant
+     passes WCAG 3:1 large-text contrast. */
   .tp-app :global(.tp-stamp) {
     font-family: var(--tp-display-condensed);
     font-weight: 700;
+    font-size: 14px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     display: inline-block;

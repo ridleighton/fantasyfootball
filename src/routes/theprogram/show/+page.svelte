@@ -116,9 +116,18 @@
   let acPhase = $state('off');
   let acMegaphonesBySchool = $state({}); // school → [{ dx, dy, delay, duration }]
 
+  // Honor the OS-level reduced-motion preference. Cuts particle counts
+  // to a minimum and short-circuits the long upset / megaphone phase
+  // waits so the show is still operable on screens with sensitivity.
+  function prefersReducedMotion() {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  }
+
   function spawnMegaphoneParticles() {
-    // Heavy, slow burst — 45 particles per bidder card.
-    const n = 45;
+    // Heavy, slow burst — 45 particles per bidder card. Reduced-motion
+    // users get a single particle that fades in place.
+    const n = prefersReducedMotion() ? 1 : 45;
     return Array.from({ length: n }, (_, i) => {
       const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.6;
       const dist = 130 + Math.random() * 110;
@@ -317,11 +326,22 @@
     );
     const winnerPct = Number(winnerSchool?.normalized ?? 100);
     const isLongShotCommit = currentEvent.kind === 'commit' && winnerPct < 25;
+    const reducedMotion = prefersReducedMotion();
 
     if (!isLongShotCommit) {
-      const wantedSpin = 3000 + Math.random() * 2000;
+      // Reduced-motion users skip the 3-5s spinner — go straight to reveal.
+      const wantedSpin = reducedMotion ? 0 : (3000 + Math.random() * 2000);
       const remaining = Math.max(0, wantedSpin - (Date.now() - startedAt));
       if (remaining > 0) await wait(remaining);
+      rollWinner = serverResult.winner;
+      rollOutcome = serverResult.outcome;
+      rollState = 'revealed';
+      return;
+    }
+
+    // Reduced-motion: skip the entire upset ceremony (17s of phases +
+    // 240-particle confetti) and just reveal the winner.
+    if (reducedMotion) {
       rollWinner = serverResult.winner;
       rollOutcome = serverResult.outcome;
       rollState = 'revealed';
@@ -451,13 +471,15 @@
     for (const s of acSchools) byS[s] = spawnMegaphoneParticles();
     acMegaphonesBySchool = byS;
 
+    const reducedMotion = prefersReducedMotion();
     acPhase = 'megaphone';
     // Long-form burst — particles take 1.5-2.1s + up to 420ms stagger,
     // so we hold the phase for ~2.6s before fading non-bidder cards.
-    await wait(2600);
+    // Reduced-motion users get a quick 200ms acknowledgement.
+    await wait(reducedMotion ? 200 : 2600);
 
     acPhase = 'fading';
-    await wait(700);
+    await wait(reducedMotion ? 100 : 700);
 
     if (acSchools.length <= 1) {
       // Sole bidder — persist the result, then go to solo_done.
@@ -597,6 +619,32 @@
 
   const previouslyRolled = $derived(currentEvent?.savedResult ?? null);
 
+  // Visually-hidden announcement for screen readers — populated when
+  // an event resolves so the outcome reaches assistive tech even
+  // though all the visual reveal is CSS-driven.
+  const revealAnnouncement = $derived.by(() => {
+    if (rollState !== 'revealed' || !currentEvent) return '';
+    if (rollOutcome === 'steal_failed_locked') {
+      const committed = currentEvent.display.committedSchool ?? '';
+      return `${committed} has locked ${currentEvent.player} from being stolen.`;
+    }
+    if (rollOutcome === 'steal_failed_stayed' || rollOutcome === 'steal_no_real_attempt') {
+      const committed = currentEvent.display.committedSchool ?? '';
+      return `${currentEvent.player} stayed loyal to ${committed}.`;
+    }
+    if (rollOutcome === 'steal_succeeded') {
+      const committed = currentEvent.display.committedSchool ?? '';
+      return `${currentEvent.player} has been stolen by ${rollWinner} from ${committed}.`;
+    }
+    if (currentEvent.kind === 'commit' && rollWinner) {
+      return `${currentEvent.player} committed to ${rollWinner}.`;
+    }
+    if (currentEvent.kind === 'auto' && rollWinner) {
+      return `${rollWinner} has auto-committed ${currentEvent.player}.`;
+    }
+    return '';
+  });
+
   $effect(() => {
     if (!data.hasOrder) return;
     if (finishParam) return;
@@ -693,13 +741,32 @@
         : Number((s.normalized ?? 0).toFixed(1))
     }));
     editOpen = true;
+    // Remember the trigger so we can restore focus to it on close.
+    if (typeof document !== 'undefined') {
+      editPriorFocus = document.activeElement;
+    }
   }
 
   function closeEditor() {
     editOpen = false;
     editRows = [];
     editError = '';
+    // Return keyboard focus to the element that opened the modal.
+    if (editPriorFocus?.focus) {
+      editPriorFocus.focus();
+      editPriorFocus = null;
+    }
   }
+
+  let editPriorFocus = null;
+
+  // Close modal on Escape; bound once when the editor opens.
+  $effect(() => {
+    if (!editOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') closeEditor(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   function removeEditRow(i) {
     editRows.splice(i, 1);
@@ -831,6 +898,10 @@
 {:else if currentEvent}
   <!-- ============================ Event ============================ -->
   <div class="theater">
+    <!-- Off-screen live region — announces the outcome to assistive tech
+         once the reveal lands. Always mounted so screen readers track it
+         consistently; populated only when an outcome resolves. -->
+    <div class="sr-only" role="status" aria-live="polite">{revealAnnouncement}</div>
     <div class="event-topbar">
       <button class="tp-pill tp-pill-small" onclick={returnToList}>← Return to List</button>
       <div class="event-breadcrumb">
@@ -930,9 +1001,11 @@
         {/if}
         <div class="helmet-frame">
           {#if s.helmet}
-            <img src={s.helmet} alt={s.school} class="helmet" referrerpolicy="no-referrer" />
+            <!-- alt="" — the school name is rendered as a sibling so the
+                 helmet image is decorative and shouldn't be announced twice. -->
+            <img src={s.helmet} alt="" class="helmet" referrerpolicy="no-referrer" />
           {:else}
-            <div class="helmet helmet-placeholder">{s.school[0] ?? '?'}</div>
+            <div class="helmet helmet-placeholder" aria-hidden="true">{s.school[0] ?? '?'}</div>
           {/if}
           {#if s.eligible === false}
             <div class="x-badge" aria-label="ineligible">×</div>
@@ -1051,9 +1124,9 @@
           <div class="winner-card-wrap">
             <div class="winner-card">
               {#if stealerHelmet}
-                <img src={stealerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
+                <img src={stealerHelmet} alt="" class="winner-img" referrerpolicy="no-referrer" />
               {:else}
-                <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
+                <div class="winner-img helmet-placeholder" aria-hidden="true">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
             <div class="winner-ring" aria-hidden="true"></div>
@@ -1074,9 +1147,9 @@
           <div class="winner-card-wrap">
             <div class="winner-card">
               {#if winnerHelmet}
-                <img src={winnerHelmet} alt={rollWinner} class="winner-img" referrerpolicy="no-referrer" />
+                <img src={winnerHelmet} alt="" class="winner-img" referrerpolicy="no-referrer" />
               {:else}
-                <div class="winner-img helmet-placeholder">{rollWinner[0] ?? '?'}</div>
+                <div class="winner-img helmet-placeholder" aria-hidden="true">{rollWinner[0] ?? '?'}</div>
               {/if}
             </div>
             <div class="winner-ring" aria-hidden="true"></div>
@@ -1117,9 +1190,9 @@
           <div class="school-card ac-bidder">
             <div class="helmet-frame">
               {#if s.helmet}
-                <img src={s.helmet} alt={s.school} class="helmet" referrerpolicy="no-referrer" />
+                <img src={s.helmet} alt="" class="helmet" referrerpolicy="no-referrer" />
               {:else}
-                <div class="helmet helmet-placeholder">{s.school[0] ?? '?'}</div>
+                <div class="helmet helmet-placeholder" aria-hidden="true">{s.school[0] ?? '?'}</div>
               {/if}
             </div>
             <div class="school-name">{s.school}</div>
@@ -1168,11 +1241,21 @@
 
     <!-- Edit modal -->
     {#if editOpen}
-      <div class="edit-backdrop" onclick={closeEditor}></div>
-      <div class="edit-modal" role="dialog" aria-label="Edit odds">
+      <button
+        type="button"
+        class="edit-backdrop"
+        aria-label="Close edit dialog"
+        onclick={closeEditor}
+      ></button>
+      <div
+        class="edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-modal-title"
+      >
         <div class="edit-head">
           <div class="edit-eyebrow">Adjust</div>
-          <h2 class="edit-title">Edit {currentEvent.type} — {currentEvent.player}</h2>
+          <h2 id="edit-modal-title" class="edit-title">Edit {currentEvent.type} — {currentEvent.player}</h2>
         </div>
         {#if editError}
           <div class="tp-alert tp-alert-error">{editError}</div>
@@ -1631,7 +1714,11 @@
     padding: 14px 28px;
     text-align: center;
     position: relative;
-    background: rgba(244, 220, 160, 0.22);
+    /* Fully opaque parchment so the #111 stamp ink stays at full
+       contrast regardless of card color underneath. Previously was
+       0.22 alpha which blended to ~#A12827 on crimson cards — ink
+       contrast dropped to ~3.5:1 and the .stamp-sub failed AA. */
+    background: rgba(244, 220, 160, 0.95);
     box-shadow:
       inset 0 0 0 3px currentColor,
       0 4px 24px rgba(0, 0, 0, 0.45);
@@ -1778,14 +1865,17 @@
   }
   .committed-banner {
     position: absolute;
-    top: -14px;
+    top: -16px;
     left: 50%;
     transform: translateX(-50%);
     background: var(--tp-gold);
     color: var(--tp-navy-dark);
-    padding: 4px 12px;
+    padding: 5px 14px;
     font-family: var(--tp-display-condensed);
-    font-size: 11px;
+    /* Was 11px — navy-dark on gold is 4.18:1, which fails AA body
+       at body sizes. Bumped to 14px bold so the all-caps treatment
+       qualifies as large text (3:1 minimum, easily met). */
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -1831,11 +1921,16 @@
     color: var(--tp-navy);
     margin-bottom: 4px;
   }
-  .school-pct { font-family: var(--tp-display-condensed); color: var(--tp-navy); letter-spacing: 0.04em; }
-  .pct-big { font-size: 28px; font-weight: 700; color: var(--tp-navy); }
-  .pct-big small { font-size: 14px; color: var(--tp-muted); margin-left: 2px; }
+  /* School-card text colors are overridden by the layout's
+     :global(.school-card) cream block, but keep these as fallback
+     defaults for any contexts that aren't on a crimson card. */
+  .school-pct { font-family: var(--tp-display-condensed); color: var(--tp-cream); letter-spacing: 0.04em; }
+  .pct-big { font-size: 28px; font-weight: 700; color: var(--tp-cream); }
+  .pct-big small { font-size: 14px; color: rgba(244, 236, 221, 0.7); margin-left: 2px; }
+  /* "Below cut" label — was oxblood on crimson (1.6:1, invisible).
+     Switched to gold-soft (~5:1 on crimson). */
   .pct-bad {
-    color: var(--tp-oxblood);
+    color: var(--tp-gold-soft);
     font-size: 13px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -2063,12 +2158,17 @@
     animation: bars-drop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
     z-index: 3;
   }
+  /* Falling / rising % during locked steal — readable on crimson cards.
+     Oxblood (#7A1F2B) and gold-2 (#B98624) both contrast at <2:1 on
+     the crimson card surface; switched to cream-soft (dropping) and
+     gold-soft (rising) which pass AA at ~5:1. */
   .pct-big.dropping {
-    color: var(--tp-oxblood);
+    color: rgba(244, 236, 221, 0.6);
     font-variant-numeric: tabular-nums;
   }
   .pct-big.rising {
-    color: var(--tp-gold-2);
+    color: var(--tp-gold-soft);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
     font-variant-numeric: tabular-nums;
   }
 
@@ -2255,11 +2355,23 @@
      Edit modal
      ============================================================ */
   .edit-backdrop {
+    /* Native <button> reset — keep the backdrop visually invisible
+       except for its dimming. */
+    appearance: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.55);
     z-index: 90;
     cursor: pointer;
+  }
+  .edit-backdrop:focus-visible {
+    outline: 2px solid var(--tp-gold);
+    outline-offset: -4px;
   }
   .edit-modal {
     position: fixed;

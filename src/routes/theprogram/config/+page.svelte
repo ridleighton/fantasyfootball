@@ -126,8 +126,8 @@
           <tbody>
             {#each conferences as c, i (c.id)}
               <tr>
-                <td><input type="text" bind:value={c.name} placeholder="e.g. C1" /></td>
-                <td><button type="button" class="cf-del" onclick={() => conferences.splice(i, 1)}>×</button></td>
+                <td><input type="text" bind:value={c.name} placeholder="e.g. C1" aria-label="Conference name" /></td>
+                <td><button type="button" class="cf-del" aria-label="Remove conference {c.name || `row ${i + 1}`}" onclick={() => conferences.splice(i, 1)}>×</button></td>
               </tr>
             {/each}
           </tbody>
@@ -152,16 +152,16 @@
           <tbody>
             {#each schools as s, i (s.id)}
               <tr>
-                <td><input type="text" bind:value={s.name} placeholder="School name" /></td>
+                <td><input type="text" bind:value={s.name} placeholder="School name" aria-label="School name" /></td>
                 <td>
-                  <select bind:value={s.conference}>
+                  <select bind:value={s.conference} aria-label="Conference for {s.name || `row ${i + 1}`}">
                     <option value=""></option>
                     {#each conferences as c}
                       {#if c.name}<option value={c.name}>{c.name}</option>{/if}
                     {/each}
                   </select>
                 </td>
-                <td><button type="button" class="cf-del" onclick={() => schools.splice(i, 1)}>×</button></td>
+                <td><button type="button" class="cf-del" aria-label="Remove school {s.name || `row ${i + 1}`}" onclick={() => schools.splice(i, 1)}>×</button></td>
               </tr>
             {/each}
           </tbody>
@@ -195,21 +195,23 @@
           </thead>
           <tbody>
             {#each photos as p, i (p.id)}
+              {@const rowLabel = [p.type, p.school].filter(Boolean).join(' · ') || `row ${i + 1}`}
               <tr>
                 <td>
-                  <select bind:value={p.type}>
+                  <select bind:value={p.type} aria-label="Photo type for {rowLabel}">
                     {#each data.photoTypes as t}
                       <option value={t}>{t}</option>
                     {/each}
                   </select>
                 </td>
-                <td><input type="text" bind:value={p.school} placeholder="(optional)" /></td>
+                <td><input type="text" bind:value={p.school} placeholder="(optional)" aria-label="School for {rowLabel}" /></td>
                 <td class="cf-url-cell">
                   <input
                     type="text"
                     bind:value={p.image_url}
                     placeholder="https://imgur.com/Poarb0q"
                     onblur={() => onUrlBlur(i)}
+                    aria-label="Image URL for {rowLabel}"
                   />
                   <button
                     type="button"
@@ -217,6 +219,7 @@
                     onclick={() => detectColors(i)}
                     disabled={p._detecting || !p.image_url}
                     title="Re-detect colors from the image"
+                    aria-label="Detect colors for {rowLabel}"
                   >
                     {p._detecting ? '…' : 'Detect'}
                   </button>
@@ -226,7 +229,7 @@
                 </td>
                 <td>
                   {#if p.image_url}
-                    <a href={previewUrl(p.image_url)} target="_blank" rel="noopener" class="cf-thumb-link">
+                    <a href={previewUrl(p.image_url)} target="_blank" rel="noopener" class="cf-thumb-link" aria-label="Preview image for {rowLabel}">
                       <img src={previewUrl(p.image_url)} alt="" class="cf-thumb" referrerpolicy="no-referrer" />
                     </a>
                   {:else}
@@ -235,27 +238,29 @@
                 </td>
                 <td>
                   <div class="cf-color">
-                    <span class="cf-swatch" style="background:{p.primary_color ?? 'transparent'}"></span>
+                    <span class="cf-swatch" style="background:{p.primary_color ?? 'transparent'}" aria-hidden="true"></span>
                     <input
                       type="text"
                       bind:value={p.primary_color}
                       placeholder="#ffffff"
                       class="cf-hex"
+                      aria-label="Primary color hex for {rowLabel}"
                     />
                   </div>
                 </td>
                 <td>
                   <div class="cf-color">
-                    <span class="cf-swatch" style="background:{p.secondary_color ?? 'transparent'}"></span>
+                    <span class="cf-swatch" style="background:{p.secondary_color ?? 'transparent'}" aria-hidden="true"></span>
                     <input
                       type="text"
                       bind:value={p.secondary_color}
                       placeholder="#000000"
                       class="cf-hex"
+                      aria-label="Secondary color hex for {rowLabel}"
                     />
                   </div>
                 </td>
-                <td><button type="button" class="cf-del" onclick={() => photos.splice(i, 1)}>×</button></td>
+                <td><button type="button" class="cf-del" aria-label="Remove photo {rowLabel}" onclick={() => photos.splice(i, 1)}>×</button></td>
               </tr>
             {/each}
           </tbody>

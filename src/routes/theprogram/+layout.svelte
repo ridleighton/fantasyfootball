@@ -59,29 +59,38 @@
      Vintage Varsity — Crimson (pulled from the logo)
      ============================================================ */
   .tp-app {
-    /* Primary chrome */
-    --tp-navy: #B8252C;       /* repurposed token: crimson */
-    --tp-navy-2: #C73238;     /* lighter crimson */
-    --tp-navy-dark: #8C1B22;  /* deeper crimson */
+    /* ============================================================
+       Vintage Varsity — Crimson on Cream (canonical guideline)
+       Token names kept for backwards compatibility; values updated to
+       match the canonical guideline:
+         --tp-navy        ==> spec --crimson
+         --tp-navy-dark   ==> spec --crimson-ink
+         --tp-cream       ==> spec --cream
+         --tp-cream-2     ==> spec --cream-sunk
+         --tp-oxblood     ==> spec --oxblood (button resting state)
+       ============================================================ */
+    /* Crimson (repurposed --tp-navy) */
+    --tp-navy: #B8252C;       /* spec: --crimson */
+    --tp-navy-2: #C73238;     /* lighter crimson (hover) */
+    --tp-navy-dark: #7A1820;  /* spec: --crimson-ink — body, helmet outlines */
     /* Surfaces */
-    --tp-cream: #F4ECDD;
-    --tp-cream-2: #EBE0CB;
-    --tp-cream-3: #DDD0B4;
-    /* Accent */
+    --tp-cream: #EFE5D0;      /* spec: --cream — primary surface */
+    --tp-cream-2: #E5DBC4;    /* spec: --cream-sunk — table stripes, sunken cards */
+    --tp-cream-3: #DDD0B4;    /* (legacy) deeper cream tier */
+    --tp-frame: #D8D3C7;      /* spec: --frame — browser/outer chrome */
+    /* Accent — gold is the "earned" color */
     --tp-gold: #D9A441;
     --tp-gold-2: #B98624;
     --tp-gold-soft: #ECC880;
-    /* Pewter (chrome bevel from the logo) */
+    /* Pewter — outer trim, resting button border, disabled states */
     --tp-pewter: #BFB8AD;
     --tp-pewter-2: #8F8979;
-    /* Warning / oxblood */
-    --tp-oxblood: #7A1F2B;
+    /* Oxblood — resting state for primary buttons (per spec) */
+    --tp-oxblood: #4A0F14;
     --tp-oxblood-soft: #A03A47;
     /* Ink */
     --tp-ink: #2B1815;
     --tp-ink-soft: #5B3F38;
-    /* Was #7A6A55 — only 3.6:1 on wheat. Darkened so labels and
-       captions pass AA 4.5:1 on the wheat backdrop. */
     --tp-muted: #5A4A35;
     /* Rules */
     --tp-rule: rgba(184, 37, 44, 0.28);
@@ -91,12 +100,14 @@
     --tp-display-condensed: 'Oswald', 'Bebas Neue', 'Impact', sans-serif;
     --tp-body: 'Lora', 'Caslon', Georgia, 'Times New Roman', serif;
 
-    /* Full-bleed backdrop used by .entry, .stage, .launcher, .theater.
-       Wheat (#E6CFA9) is the locked-in show backdrop. */
-    --tp-stage-bg: #E6CFA9;
+    /* Full-bleed backdrop — cream per the canonical guideline.
+       The drama on every page comes from the contrast between the
+       cream-dominant layout and the eventual gold reveal, not from
+       a dark theatrical backdrop. */
+    --tp-stage-bg: var(--tp-cream);
 
     min-height: 100vh;
-    background: #E6CFA9;
+    background: var(--tp-cream);
     color: var(--tp-ink);
     font-family: var(--tp-body);
     font-feature-settings: 'onum' 1, 'liga' 1, 'kern' 1;

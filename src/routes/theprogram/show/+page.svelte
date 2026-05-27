@@ -2155,6 +2155,15 @@
     /* Pulse halo to draw attention to the locked one */
     animation: locked-pulse 1.5s ease-in-out infinite;
   }
+  .schools-locked .school-card.committed :global(.school-name) {
+    font-size: 22px;
+    color: #111111;
+  }
+  .schools-locked .school-card.committed :global(.pct-big),
+  .schools-locked .school-card.committed :global(.school-pct),
+  .schools-locked .school-card.committed :global(.pct-big small) {
+    color: #111111;
+  }
   @keyframes locked-pulse {
     0%, 100% { box-shadow: 0 0 0 3px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3); }
     50%      { box-shadow: 0 0 0 8px var(--tp-gold), 0 6px 0 rgba(0, 0, 0, 0.3); }

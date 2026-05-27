@@ -2318,7 +2318,7 @@
     font-size: 12px;
     letter-spacing: 0.4em;
     text-transform: uppercase;
-    color: var(--tp-gold-soft);
+    color: var(--tp-navy-dark);
     margin-bottom: 8px;
   }
   .ac-phase2-prompt {

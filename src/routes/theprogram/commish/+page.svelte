@@ -1,5 +1,6 @@
 <script>
   import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
 
   let { data, form } = $props();
 
@@ -7,6 +8,72 @@
   let saving = $state(false);
   let lastSavedAt = $state(null);
   let tempIdCounter = -1;
+
+  // ---- Coach Priority Lists ----
+  let coachPriorities = $state(structuredClone(data.coachPriorities ?? []));
+  let cpCsv = $state('');
+  let cpUploading = $state(false);
+  let cpMessage = $state('');
+
+  const grouped = $derived(() => {
+    const m = new Map();
+    for (const r of coachPriorities) {
+      const k = r.school_name;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(r);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  });
+  const submittedSchools = $derived(new Set(coachPriorities.map(r => r.school_name.toLowerCase())));
+  const missingSchools = $derived(
+    (data.schools ?? []).filter(s => !submittedSchools.has(s.toLowerCase())).sort()
+  );
+
+  async function uploadCoachPriorities() {
+    if (!cpCsv.trim()) { cpMessage = 'Paste a CSV first.'; return; }
+    cpUploading = true; cpMessage = '';
+    try {
+      const r = await fetch('/theprogram/commish/coach-priorities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: cpCsv })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      cpMessage = `Saved ${body.inserted} row${body.inserted === 1 ? '' : 's'}` + (body.skipped ? ` (${body.skipped} skipped)` : '') + '.';
+      cpCsv = '';
+      await invalidateAll();
+      coachPriorities = structuredClone(data.coachPriorities ?? []);
+    } catch (e) {
+      cpMessage = `Upload failed: ${e.message}`;
+    } finally {
+      cpUploading = false;
+    }
+  }
+
+  async function deleteCoachRow(id) {
+    if (!confirm('Delete this row?')) return;
+    const r = await fetch('/theprogram/commish/coach-priorities', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    if (!r.ok) { cpMessage = `Delete failed (HTTP ${r.status}).`; return; }
+    await invalidateAll();
+    coachPriorities = structuredClone(data.coachPriorities ?? []);
+  }
+
+  async function clearCoachSchool(school) {
+    if (!confirm(`Clear all entries for ${school}?`)) return;
+    const r = await fetch('/theprogram/commish/coach-priorities', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ school })
+    });
+    if (!r.ok) { cpMessage = `Delete failed (HTTP ${r.status}).`; return; }
+    await invalidateAll();
+    coachPriorities = structuredClone(data.coachPriorities ?? []);
+  }
 
   function addRow() {
     rows.push({
@@ -155,6 +222,62 @@
       </button>
     </div>
   </form>
+
+  <section class="cp-section">
+    <header class="cp-head">
+      <h2>Coach Priority Lists</h2>
+      <p>Per-week priorities submitted by each coach. Columns: <code>School, Player, Conference, Priority</code>. Lower priority = higher preference.</p>
+    </header>
+
+    <div class="cp-upload">
+      <label class="tp-label" for="cp-csv">Paste CSV / TSV</label>
+      <textarea id="cp-csv" rows="5" class="tp-field" bind:value={cpCsv}
+        placeholder="School,Player,Conference,Priority&#10;Texas,John Doe,SEC,1&#10;Texas,Jane Roe,SEC,2"></textarea>
+      <div class="cp-upload-row">
+        <button type="button" class="tp-pill tp-pill-gold" onclick={uploadCoachPriorities} disabled={cpUploading}>
+          {cpUploading ? 'Uploading…' : 'Upload'}
+        </button>
+        {#if cpMessage}<span class="cp-msg">{cpMessage}</span>{/if}
+      </div>
+    </div>
+
+    {#if coachPriorities.length === 0}
+      <p class="cp-empty">No coach lists submitted for this week.</p>
+    {:else}
+      {#each grouped() as [school, entries] (school)}
+        <div class="cp-school">
+          <header class="cp-school-head">
+            <h3>{school}</h3>
+            <button type="button" class="tp-pill tp-pill-small" onclick={() => clearCoachSchool(school)}>Clear school</button>
+          </header>
+          <table class="cp-table">
+            <thead>
+              <tr><th>Priority</th><th>Player</th><th>Conference</th><th></th></tr>
+            </thead>
+            <tbody>
+              {#each entries as e (e.id)}
+                <tr>
+                  <td>{e.priority}</td>
+                  <td>{e.player_name}</td>
+                  <td>{e.conference}</td>
+                  <td><button type="button" class="cp-del" onclick={() => deleteCoachRow(e.id)} aria-label="Delete">×</button></td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/each}
+    {/if}
+
+    {#if missingSchools.length > 0}
+      <div class="cp-missing">
+        <h3>No list submitted</h3>
+        <ul>
+          {#each missingSchools as s}<li>{s}</li>{/each}
+        </ul>
+      </div>
+    {/if}
+  </section>
 </div>
 
 <style>
@@ -305,4 +428,62 @@
     align-items: center;
     gap: 12px;
   }
+  /* ---- Coach Priority Lists section ---- */
+  .cp-section { margin-top: 48px; }
+  .cp-head h2 {
+    font-family: var(--tp-display-condensed);
+    font-size: 22px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0 0 6px;
+  }
+  .cp-head p { margin: 0 0 18px; color: var(--tp-navy-dark); }
+  .cp-head code { font-family: ui-monospace, monospace; background: var(--tp-cream-2); padding: 1px 5px; border-radius: 2px; }
+  .cp-upload { margin-bottom: 28px; }
+  .cp-upload-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .cp-msg { font-size: 13px; color: var(--tp-navy-dark); font-style: italic; }
+  .cp-empty { color: var(--tp-navy-dark); font-style: italic; }
+  .cp-school { margin-bottom: 22px; }
+  .cp-school-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--tp-pewter);
+    margin-bottom: 8px;
+  }
+  .cp-school-head h3 {
+    font-family: var(--tp-display-condensed);
+    font-size: 15px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0;
+  }
+  .cp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--tp-body);
+    color: var(--tp-navy-dark);
+    font-size: 14px;
+  }
+  .cp-table th, .cp-table td { padding: 4px 8px; text-align: left; }
+  .cp-table th { font-family: var(--tp-display-condensed); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--tp-navy-dark); }
+  .cp-table tbody tr:nth-child(odd) { background: var(--tp-cream); }
+  .cp-table tbody tr:nth-child(even) { background: var(--tp-cream-2); }
+  .cp-del {
+    background: none; border: none; cursor: pointer;
+    color: var(--tp-navy-dark); font-size: 16px; line-height: 1;
+    padding: 2px 6px;
+  }
+  .cp-del:hover { color: var(--tp-navy); }
+  .cp-missing { margin-top: 22px; }
+  .cp-missing h3 {
+    font-family: var(--tp-display-condensed);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-pewter-deep);
+    margin: 0 0 8px;
+  }
+  .cp-missing ul { margin: 0; padding-left: 18px; color: var(--tp-pewter-deep); }
 </style>

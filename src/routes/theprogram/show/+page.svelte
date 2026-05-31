@@ -1,6 +1,7 @@
 <script>
   import { page } from '$app/stores';
   import { goto, invalidateAll } from '$app/navigation';
+  import { dndzone } from 'svelte-dnd-action';
   import { preloadHelmetCanvas, createConfettiBurst } from '$lib/client/theprogram/confetti.js';
   import { cropHelmet } from '$lib/client/theprogram/helmetTrim.js';
 
@@ -12,6 +13,94 @@
   );
   let savingOrder = $state(false);
   let orderError = $state('');
+
+  // ---------- Order Review Grid (pre-show) ----------
+  const ROLL_LABELS = { commit: 'Commit', steal: 'Steal', 'auto-commit': 'Auto-Commit' };
+  const orderGridConfs = $derived(Object.keys(data.showOrder ?? {}).sort());
+  let orderTab = $state((Object.keys(data.showOrder ?? {})[0]) ?? '');
+  let orderMessage = $state('');
+  // Local mutable copy of the show order so drag-drop updates feel instant.
+  let orderLocal = $state(structuredClone(data.showOrder ?? {}));
+
+  // Build the display items for the currently selected tab.
+  function orderBlocksForTab() {
+    if (!orderTab) return [];
+    const block = orderLocal?.[orderTab] ?? {};
+    const sug = (data.prioritySuggestions ?? {})?.[orderTab] ?? {};
+    const out = [];
+    for (const rollType of ['steal', 'auto-commit', 'commit']) {
+      const list = block[rollType];
+      if (!list || list.length === 0) continue;
+      const sugList = sug[rollType] ?? [];
+      const sugByPlayer = new Map(sugList.map(s => [s.player.toLowerCase(), s]));
+      const items = list.map(row => {
+        const s = sugByPlayer.get(row.player.toLowerCase());
+        return {
+          id: `${orderTab}|${rollType}|${row.player}`,
+          player: row.player,
+          position: row.position,
+          orderSource: row.orderSource,
+          suggested: s?.suggestedPosition ?? null,
+          reason: (s?.suggestedPosition === row.position)
+            ? 'Import order matches priority suggestion'
+            : (s?.reason ?? 'No coach list or ranking data — suggested position matches import order')
+        };
+      });
+      out.push({ rollType, label: ROLL_LABELS[rollType] ?? rollType, items });
+    }
+    return out;
+  }
+
+  function onOrderConsider(conf, rollType, e) {
+    const items = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
+    if (!orderLocal[conf]) orderLocal[conf] = {};
+    orderLocal[conf][rollType] = items.map(i => ({
+      player: i.player, position: i.position, orderSource: 'override'
+    }));
+  }
+  async function onOrderFinalize(conf, rollType, e) {
+    const items = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
+    if (!orderLocal[conf]) orderLocal[conf] = {};
+    orderLocal[conf][rollType] = items.map(i => ({
+      player: i.player, position: i.position, orderSource: 'override'
+    }));
+    orderMessage = 'Saving…';
+    try {
+      const r = await fetch('/theprogram/show/save-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conference: conf,
+          roll_type: rollType,
+          ordered_players: items.map(i => i.player)
+        })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      orderMessage = 'Saved.';
+    } catch (err) {
+      orderMessage = `Save failed: ${err.message}`;
+    }
+  }
+
+  async function resetBlock(conf, rollType) {
+    if (!confirm('Reset this block to the original import order?')) return;
+    orderMessage = 'Resetting…';
+    try {
+      const r = await fetch('/theprogram/show/save-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conference: conf, roll_type: rollType, reset: true })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      await invalidateAll();
+      orderLocal = structuredClone(data.showOrder ?? {});
+      orderMessage = 'Reset to import order.';
+    } catch (err) {
+      orderMessage = `Reset failed: ${err.message}`;
+    }
+  }
 
   async function saveOrder() {
     orderError = '';
@@ -868,6 +957,68 @@
         {savingOrder ? 'Saving…' : 'Start the Show →'}
       </button>
     </div>
+
+    {#if orderGridConfs.length > 0}
+      <section class="order-review">
+        <header class="or-head">
+          <h2>Order Review</h2>
+          <p>Imported order shown by default. Drag to override before the show begins. Each conference locks once its first roll executes.</p>
+        </header>
+
+        <nav class="or-tabs" role="tablist">
+          {#each orderGridConfs as c}
+            <button type="button" role="tab"
+              class="or-tab" class:active={orderTab === c}
+              aria-selected={orderTab === c}
+              onclick={() => orderTab = c}>
+              {c}
+              {#if (data.lockedConferences ?? []).includes(c)}<span class="or-lock" aria-label="Locked">🔒</span>{/if}
+            </button>
+          {/each}
+        </nav>
+
+        {#if orderTab && orderBlocksForTab().length > 0}
+          {#each orderBlocksForTab() as block (block.rollType)}
+            <div class="or-block">
+              <div class="or-block-head">
+                <h3>{block.label}</h3>
+                {#if !(data.lockedConferences ?? []).includes(orderTab)}
+                  <button type="button" class="tp-pill tp-pill-small" onclick={() => resetBlock(orderTab, block.rollType)}>Reset to import order</button>
+                {/if}
+              </div>
+              <table class="or-table">
+                <thead>
+                  <tr><th>#</th><th>Player</th><th>Suggested #</th><th>Suggestion reason</th><th></th></tr>
+                </thead>
+                <tbody
+                  use:dndzone={{
+                    items: block.items,
+                    flipDurationMs: 150,
+                    dragDisabled: (data.lockedConferences ?? []).includes(orderTab)
+                  }}
+                  onconsider={(e) => onOrderConsider(orderTab, block.rollType, e)}
+                  onfinalize={(e) => onOrderFinalize(orderTab, block.rollType, e)}
+                >
+                  {#each block.items as item (item.id)}
+                    <tr>
+                      <td class="or-pos">{item.position}</td>
+                      <td>{item.player}</td>
+                      <td>{item.suggested != null && item.suggested !== item.position ? `#${item.suggested}` : ''}</td>
+                      <td class="or-reason">{item.reason}</td>
+                      <td class="or-grip" aria-hidden="true">⋮⋮</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {/each}
+        {:else if orderTab}
+          <p class="or-empty">No events in this conference.</p>
+        {/if}
+
+        {#if orderMessage}<p class="or-msg">{orderMessage}</p>{/if}
+      </section>
+    {/if}
   </div>
 {:else if (data.conferenceList ?? []).length === 0}
   <div class="stage">
@@ -1456,6 +1607,74 @@
     color: var(--tp-navy);
   }
   .order-select { font-family: var(--tp-display-condensed); font-weight: 600; letter-spacing: 0.1em; }
+
+  /* ---- Order Review Grid ---- */
+  .order-review { margin-top: 32px; max-width: 920px; }
+  .or-head h2 {
+    font-family: var(--tp-display-condensed);
+    font-size: 22px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0 0 6px;
+  }
+  .or-head p { margin: 0 0 16px; color: var(--tp-navy-dark); }
+  .or-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .or-tab {
+    padding: 8px 14px;
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-navy);
+    border-radius: 999px;
+    color: var(--tp-navy);
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .or-tab.active { background: var(--tp-navy); color: var(--tp-cream); border-color: var(--tp-gold); }
+  .or-lock { font-size: 12px; }
+  .or-block { margin-bottom: 22px; }
+  .or-block-head {
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--tp-pewter);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+  .or-block-head h3 {
+    font-family: var(--tp-display-condensed);
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0;
+  }
+  .or-table { width: 100%; border-collapse: collapse; color: var(--tp-navy-dark); }
+  .or-table th {
+    text-align: left;
+    padding: 6px 8px;
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    border-bottom: 2px solid var(--tp-navy);
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
+  }
+  .or-table tbody tr {
+    background: var(--tp-cream);
+    cursor: grab;
+  }
+  .or-table tbody tr:nth-child(even) { background: var(--tp-cream-2); }
+  .or-table tbody tr:active { cursor: grabbing; }
+  .or-table td { padding: 8px; font-family: var(--tp-body); }
+  .or-pos { font-family: var(--tp-display-condensed); font-weight: 700; color: var(--tp-navy); width: 36px; }
+  .or-reason { font-size: 12px; color: var(--tp-pewter-deep); font-style: italic; }
+  .or-grip { color: var(--tp-pewter-deep); user-select: none; width: 24px; text-align: center; }
+  .or-empty { color: var(--tp-pewter-deep); font-style: italic; }
+  .or-msg { color: var(--tp-navy-dark); font-style: italic; font-size: 13px; }
 
   .tp-pill-big {
     padding: 18px 44px;

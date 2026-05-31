@@ -67,7 +67,7 @@ export async function load() {
         ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(7)
     `).catch(() => {});
 
-    const [confRes, schoolRes, photoRes] = await Promise.all([
+    const [confRes, schoolRes, photoRes, rankingsRes, schoolPriRes] = await Promise.all([
       db.query(`SELECT id, name FROM program_conferences ORDER BY name ASC`),
       db.query(`SELECT id, name, conference FROM program_schools ORDER BY conference ASC, name ASC`),
       db.query(
@@ -75,13 +75,24 @@ export async function load() {
                 primary_color, secondary_color
            FROM program_photos
           ORDER BY type ASC, school ASC NULLS LAST`
-      )
+      ),
+      db.query(
+        `SELECT id, player_name, tier, rank, updated_at
+           FROM program_player_rankings
+          ORDER BY tier ASC, rank ASC, player_name ASC`
+      ).catch(() => ({ rows: [] })),
+      db.query(
+        `SELECT id, school_name, priority FROM program_school_priority
+          ORDER BY priority ASC`
+      ).catch(() => ({ rows: [] }))
     ]);
     return {
       conferences: confRes.rows,
       schools: schoolRes.rows,
       photos: photoRes.rows,
-      photoTypes: PHOTO_TYPES
+      photoTypes: PHOTO_TYPES,
+      playerRankings: rankingsRes.rows,
+      schoolPriority: schoolPriRes.rows
     };
   } finally {
     await db.end();

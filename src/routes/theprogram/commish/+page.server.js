@@ -24,7 +24,7 @@ export async function load() {
   const { weekId, weekNumber } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [rowsRes, confRes] = await Promise.all([
+    const [rowsRes, confRes, coachRes, schoolsRes] = await Promise.all([
       db.query(
         `SELECT id, conference, type, player, school, locked, in_original_roll,
                 odds, result, committed_school
@@ -33,14 +33,24 @@ export async function load() {
           ORDER BY id ASC`,
         [weekId]
       ),
-      db.query(`SELECT name FROM program_conferences ORDER BY name ASC`)
+      db.query(`SELECT name FROM program_conferences ORDER BY name ASC`),
+      db.query(
+        `SELECT id, school_name, player_name, conference, priority, submitted_at
+           FROM program_coach_priority_lists
+          WHERE week_id = $1
+          ORDER BY school_name, priority`,
+        [weekId]
+      ),
+      db.query(`SELECT name FROM program_schools ORDER BY name ASC`)
     ]);
     return {
       weekId,
       weekNumber,
       rows: rowsRes.rows,
       conferences: confRes.rows.map(r => r.name),
-      types: TYPES
+      types: TYPES,
+      coachPriorities: coachRes.rows,
+      schools: schoolsRes.rows.map(r => r.name)
     };
   } finally {
     await db.end();

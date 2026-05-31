@@ -10,6 +10,12 @@ import {
   helmetForSchool,
   colorsForSchool
 } from '$lib/server/theprogram/show.js';
+import {
+  getShowOrder,
+  normalizeRollType,
+  lockedConferences,
+  computePrioritySuggestions
+} from '$lib/server/theprogram/priority.js';
 
 const CONFERENCES = ['C1', 'C2', 'C3', 'C4', 'C5'];
 
@@ -61,13 +67,24 @@ async function loadFromDb() {
     const hasOrder = conferenceOrder.length > 0;
 
     if (!hasOrder) {
+      // Still load the show-order + priority suggestions so the
+      // Conference Order screen can render the per-conference Order
+      // Review Grid below the picker.
+      const [showOrder, suggestions, locked] = await Promise.all([
+        getShowOrder(db, weekId),
+        computePrioritySuggestions(db, weekId),
+        lockedConferences(db, weekId)
+      ]);
       return {
         weekId,
         weekNumber,
         hasOrder: false,
         conferences: CONFERENCES,
         events: [],
-        conferenceList: []
+        conferenceList: [],
+        showOrder,
+        prioritySuggestions: suggestions,
+        lockedConferences: [...locked]
       };
     }
 
@@ -113,18 +130,33 @@ async function loadFromDb() {
       if (!byConf.has(ev.conference)) byConf.set(ev.conference, []);
       byConf.get(ev.conference).push(ev);
     }
-    // Sort each conference by type (Steal → Auto-Commit → Commit) then
-    // alphabetically by player within type.
+    // Sort each conference by type (Steal → Auto-Commit → Commit) and
+    // within type by the position recorded in program_show_order. The
+    // position table is written at week-import time (import order) and
+    // updated by the commissioner via the Order Review Grid (overrides).
     const TYPE_ORDER = { 'Steal': 0, 'Auto-Commit': 1, 'Commit': 2 };
+    const showOrder = await getShowOrder(db, weekId);
+    function positionFor(ev) {
+      const rt = normalizeRollType(ev.type);
+      const block = showOrder?.[ev.conference]?.[rt];
+      if (!block) return Number.MAX_SAFE_INTEGER;
+      const hit = block.find(b => (b.player ?? '').toLowerCase() === (ev.player ?? '').toLowerCase());
+      return hit ? hit.position : Number.MAX_SAFE_INTEGER;
+    }
     for (const [, list] of byConf) {
       list.sort((a, b) => {
         const ta = TYPE_ORDER[a.type] ?? 99;
         const tb = TYPE_ORDER[b.type] ?? 99;
         if (ta !== tb) return ta - tb;
+        const pa = positionFor(a);
+        const pb = positionFor(b);
+        if (pa !== pb) return pa - pb;
         return (a.player ?? '').localeCompare(b.player ?? '', undefined, { sensitivity: 'base' });
       });
       list.forEach((ev, i) => { ev.confIndex = i; });
     }
+    const lockedConfs = await lockedConferences(db, weekId);
+    const prioritySuggestions = await computePrioritySuggestions(db, weekId);
 
     const conferenceList = conferenceOrder
       .filter(c => byConf.has(c))
@@ -146,7 +178,10 @@ async function loadFromDb() {
       conferenceList,
       placeholderHelmet: photos.placeholder,
       lockedImage: photos.locked,
-      barsImage: photos.bars
+      barsImage: photos.bars,
+      showOrder,
+      prioritySuggestions,
+      lockedConferences: [...lockedConfs]
     };
   } finally {
     await db.end();

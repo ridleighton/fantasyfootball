@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { createClient } from '$lib/server/db.js';
 import { parseRollEvents } from '$lib/server/theprogram/parse-roll-events.js';
+import { writeImportOrder } from '$lib/server/theprogram/priority.js';
 
 export async function load() {
   try {
@@ -101,6 +102,10 @@ export const actions = {
           r.committed_school
         ]);
       }
+
+      // Populate program_show_order with the import sequence so the
+      // show + launcher always read from one canonical ordering source.
+      await writeImportOrder(db, createdWeekId, records);
 
       await setActiveWeek(db, createdWeekId);
       await db.query('COMMIT');

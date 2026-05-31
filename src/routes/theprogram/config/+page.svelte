@@ -1,5 +1,7 @@
 <script>
   import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
+  import { dndzone } from 'svelte-dnd-action';
   import { extractColors } from '$lib/client/theprogram/extract-colors.js';
 
   let { data, form } = $props();
@@ -13,6 +15,98 @@
   let saving = $state(false);
   let lastSavedAt = $state(null);
   let tempId = -1;
+
+  // ---- Player Rankings ----
+  let playerRankings = $state(structuredClone(data.playerRankings ?? []));
+  let prCsv = $state('');
+  let prUploading = $state(false);
+  let prMessage = $state('');
+
+  async function uploadPlayerRankings() {
+    if (!prCsv.trim()) { prMessage = 'Paste a CSV first.'; return; }
+    prUploading = true; prMessage = '';
+    try {
+      const r = await fetch('/theprogram/config/player-rankings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: prCsv })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      prMessage = `Saved ${body.inserted} row${body.inserted === 1 ? '' : 's'}.`;
+      prCsv = '';
+      await invalidateAll();
+      playerRankings = structuredClone(data.playerRankings ?? []);
+    } catch (e) {
+      prMessage = `Upload failed: ${e.message}`;
+    } finally {
+      prUploading = false;
+    }
+  }
+
+  async function updatePlayerRanking(r) {
+    const tier = Number.parseInt(r.tier, 10);
+    const rank = Number.parseInt(r.rank, 10);
+    if (!Number.isInteger(tier) || !Number.isInteger(rank)) return;
+    await fetch('/theprogram/config/player-rankings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: r.id, tier, rank })
+    });
+  }
+
+  async function deletePlayerRanking(id) {
+    if (!confirm('Delete this player ranking?')) return;
+    await fetch('/theprogram/config/player-rankings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    await invalidateAll();
+    playerRankings = structuredClone(data.playerRankings ?? []);
+  }
+
+  // ---- School Priority (drag list) ----
+  // Source of truth = list of school names. Priority = 1-based index.
+  // Build the initial ordered list by combining program_school_priority
+  // (ordered) plus any program_schools that don't yet have a priority,
+  // appended at the end.
+  function buildSpInitial() {
+    const known = new Map((data.schoolPriority ?? []).map(r => [r.school_name.toLowerCase(), r.school_name]));
+    const ordered = (data.schoolPriority ?? []).map(r => r.school_name);
+    for (const s of data.schools ?? []) {
+      if (!known.has(s.name.toLowerCase())) ordered.push(s.name);
+    }
+    return ordered.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
+  }
+  let spItems = $state(buildSpInitial());
+  let spMessage = $state('');
+  let spSaveTimer = null;
+
+  function handleSpConsider(e) {
+    spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
+  }
+  function handleSpFinalize(e) {
+    spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
+    // Debounce-save 300ms after the drop settles.
+    if (spSaveTimer) clearTimeout(spSaveTimer);
+    spSaveTimer = setTimeout(saveSchoolPriority, 300);
+  }
+  async function saveSchoolPriority() {
+    spMessage = 'Saving…';
+    try {
+      const r = await fetch('/theprogram/config/school-priority', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_schools: spItems.map(i => i.name) })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      spMessage = `Saved ${body.count} school${body.count === 1 ? '' : 's'}.`;
+    } catch (e) {
+      spMessage = `Save failed: ${e.message}`;
+    }
+  }
 
   // Mirror the server-side Imgur resolver for the preview thumbnail.
   function previewUrl(url) {
@@ -274,6 +368,67 @@
       </button>
     </div>
   </form>
+
+  <!-- Player Rankings — master tier/rank list (not week-scoped) -->
+  <section class="pr-section">
+    <header class="pr-head">
+      <h2>Player Rankings</h2>
+      <p>Master list of players with tier and rank. Lower numbers = better. Carries forward week to week.</p>
+    </header>
+    <div class="pr-upload">
+      <label class="tp-label" for="pr-csv">Paste CSV / TSV</label>
+      <textarea id="pr-csv" rows="5" class="tp-field" bind:value={prCsv}
+        placeholder="Player,Tier,Rank&#10;John Doe,1,1&#10;Jane Roe,1,2"></textarea>
+      <div class="pr-upload-row">
+        <button type="button" class="tp-pill tp-pill-gold" onclick={uploadPlayerRankings} disabled={prUploading}>
+          {prUploading ? 'Uploading…' : 'Upload'}
+        </button>
+        {#if prMessage}<span class="pr-msg">{prMessage}</span>{/if}
+      </div>
+    </div>
+    {#if playerRankings.length === 0}
+      <p class="pr-empty">No rankings on file.</p>
+    {:else}
+      <table class="pr-table">
+        <thead>
+          <tr><th>Tier</th><th>Rank</th><th>Player</th><th></th></tr>
+        </thead>
+        <tbody>
+          {#each playerRankings as r (r.id)}
+            <tr>
+              <td><input type="number" min="1" bind:value={r.tier} onchange={() => updatePlayerRanking(r)} aria-label="Tier" /></td>
+              <td><input type="number" min="1" bind:value={r.rank} onchange={() => updatePlayerRanking(r)} aria-label="Rank" /></td>
+              <td>{r.player_name}</td>
+              <td><button type="button" class="pr-del" onclick={() => deletePlayerRanking(r.id)} aria-label="Delete">×</button></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+  </section>
+
+  <!-- School Priority — drag list. Position = priority. -->
+  <section class="sp-section">
+    <header class="sp-head">
+      <h2>School Priority</h2>
+      <p>Drag schools into the order that decides ties when coach lists conflict. Top of the list = priority 1.</p>
+    </header>
+    <ul
+      class="sp-list"
+      use:dndzone={{ items: spItems, flipDurationMs: 150 }}
+      onconsider={handleSpConsider}
+      onfinalize={handleSpFinalize}
+    >
+      {#each spItems as item (item.id)}
+        <li class="sp-item">
+          <span class="sp-pri">{item.position}</span>
+          <span class="sp-name">{item.name}</span>
+          <span class="sp-grip" aria-hidden="true">⋮⋮</span>
+        </li>
+      {/each}
+    </ul>
+    {#if spMessage}<span class="sp-msg">{spMessage}</span>{/if}
+  </section>
 </div>
 
 <style>
@@ -466,4 +621,66 @@
     justify-content: flex-end;
     margin-top: 28px;
   }
+
+  /* ---- Player Rankings + School Priority ---- */
+  .pr-section, .sp-section { margin-top: 48px; }
+  .pr-head h2, .sp-head h2 {
+    font-family: var(--tp-display-condensed);
+    font-size: 22px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0 0 6px;
+  }
+  .pr-head p, .sp-head p { margin: 0 0 18px; color: var(--tp-navy-dark); }
+  .pr-upload { margin-bottom: 22px; }
+  .pr-upload-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .pr-msg, .sp-msg { font-size: 13px; color: var(--tp-navy-dark); font-style: italic; }
+  .pr-empty { color: var(--tp-navy-dark); font-style: italic; }
+  .pr-table { width: 100%; border-collapse: collapse; font-family: var(--tp-body); color: var(--tp-navy-dark); }
+  .pr-table th, .pr-table td { padding: 6px 8px; text-align: left; }
+  .pr-table th { font-family: var(--tp-display-condensed); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
+  .pr-table tbody tr:nth-child(odd) { background: var(--tp-cream); }
+  .pr-table tbody tr:nth-child(even) { background: var(--tp-cream-2); }
+  .pr-table input[type=number] {
+    width: 70px;
+    background: var(--tp-cream-2);
+    border: 1px solid var(--tp-pewter);
+    border-radius: 3px;
+    padding: 4px 6px;
+    color: var(--tp-navy-dark);
+  }
+  .pr-table input[type=number]:focus {
+    outline: none;
+    border-color: var(--tp-navy);
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
+  }
+  .pr-del { background: none; border: none; cursor: pointer; color: var(--tp-navy-dark); font-size: 16px; padding: 2px 6px; }
+  .pr-del:hover { color: var(--tp-navy); }
+
+  .sp-list { list-style: none; margin: 0; padding: 0; max-width: 480px; }
+  .sp-item {
+    display: grid;
+    grid-template-columns: 40px 1fr 24px;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-pewter);
+    border-radius: 3px;
+    margin-bottom: 6px;
+    font-family: var(--tp-body);
+    color: var(--tp-navy-dark);
+    cursor: grab;
+  }
+  .sp-item:active { cursor: grabbing; }
+  .sp-pri {
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--tp-navy);
+    letter-spacing: 0.06em;
+  }
+  .sp-name { font-size: 14px; }
+  .sp-grip { color: var(--tp-pewter-deep); font-weight: 700; user-select: none; }
 </style>

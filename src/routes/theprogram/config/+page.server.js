@@ -67,7 +67,7 @@ export async function load() {
         ADD COLUMN IF NOT EXISTS secondary_color VARCHAR(7)
     `).catch(() => {});
 
-    const [confRes, schoolRes, photoRes, rankingsRes, schoolPriRes] = await Promise.all([
+    const [confRes, schoolRes, photoRes, rankingsRes, schoolPriRes, allSchoolsRes] = await Promise.all([
       db.query(`SELECT id, name FROM program_conferences ORDER BY name ASC`),
       db.query(`SELECT id, name, conference FROM program_schools ORDER BY conference ASC, name ASC`),
       db.query(
@@ -84,7 +84,25 @@ export async function load() {
       db.query(
         `SELECT id, school_name, priority FROM program_school_priority
           ORDER BY priority ASC`
-      ).catch(() => ({ rows: [] }))
+      ).catch(() => ({ rows: [] })),
+      // Union of every school name we've ever seen — drives the School
+      // Priority drag list so it works even when program_schools is
+      // empty (older shows ran straight off program_photos + odds strings).
+      db.query(`
+        SELECT DISTINCT school AS name FROM (
+          SELECT name AS school FROM program_schools
+          UNION
+          SELECT school FROM program_photos
+            WHERE school IS NOT NULL AND TRIM(school) <> ''
+          UNION
+          SELECT school FROM program_roll_events
+            WHERE school IS NOT NULL AND TRIM(school) <> ''
+          UNION
+          SELECT committed_school FROM program_roll_events
+            WHERE committed_school IS NOT NULL AND TRIM(committed_school) <> ''
+        ) u
+        ORDER BY school ASC
+      `).catch(() => ({ rows: [] }))
     ]);
     return {
       conferences: confRes.rows,
@@ -92,7 +110,8 @@ export async function load() {
       photos: photoRes.rows,
       photoTypes: PHOTO_TYPES,
       playerRankings: rankingsRes.rows,
-      schoolPriority: schoolPriRes.rows
+      schoolPriority: schoolPriRes.rows,
+      schoolsForPriority: allSchoolsRes.rows.map(r => r.name)
     };
   } finally {
     await db.end();

@@ -67,15 +67,15 @@
   }
 
   // ---- School Priority (drag list) ----
-  // Source of truth = list of school names. Priority = 1-based index.
-  // Build the initial ordered list by combining program_school_priority
-  // (ordered) plus any program_schools that don't yet have a priority,
-  // appended at the end.
+  // Initial order: program_school_priority (existing ranks) followed by
+  // every other known school name (program_schools UNION program_photos
+  // UNION program_roll_events.school + committed_school). Position in
+  // the list = priority value on save.
   function buildSpInitial() {
     const known = new Map((data.schoolPriority ?? []).map(r => [r.school_name.toLowerCase(), r.school_name]));
     const ordered = (data.schoolPriority ?? []).map(r => r.school_name);
-    for (const s of data.schools ?? []) {
-      if (!known.has(s.name.toLowerCase())) ordered.push(s.name);
+    for (const name of data.schoolsForPriority ?? []) {
+      if (!known.has((name ?? '').toLowerCase())) ordered.push(name);
     }
     return ordered.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
   }

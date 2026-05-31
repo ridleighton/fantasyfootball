@@ -34,14 +34,17 @@ export async function load() {
         [weekId]
       ),
       db.query(`SELECT name FROM program_conferences ORDER BY name ASC`),
+      // program_coach_priority_lists is added by db/program-priority.sql;
+      // tolerate its absence so the page still loads if the SQL hasn't
+      // been run yet.
       db.query(
         `SELECT id, school_name, player_name, conference, priority, submitted_at
            FROM program_coach_priority_lists
           WHERE week_id = $1
           ORDER BY school_name, priority`,
         [weekId]
-      ),
-      db.query(`SELECT name FROM program_schools ORDER BY name ASC`)
+      ).catch(() => ({ rows: [] })),
+      db.query(`SELECT name FROM program_schools ORDER BY name ASC`).catch(() => ({ rows: [] }))
     ]);
     return {
       weekId,

@@ -105,7 +105,13 @@ export const actions = {
 
       // Populate program_show_order with the import sequence so the
       // show + launcher always read from one canonical ordering source.
-      await writeImportOrder(db, createdWeekId, records);
+      // Tolerate the table not existing yet (db/program-priority.sql
+      // hasn't been run); the legacy roll_events fallback still works.
+      try {
+        await writeImportOrder(db, createdWeekId, records);
+      } catch (err) {
+        if (!String(err.message).includes('program_show_order')) throw err;
+      }
 
       await setActiveWeek(db, createdWeekId);
       await db.query('COMMIT');

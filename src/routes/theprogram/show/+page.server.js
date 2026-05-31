@@ -69,11 +69,13 @@ async function loadFromDb() {
     if (!hasOrder) {
       // Still load the show-order + priority suggestions so the
       // Conference Order screen can render the per-conference Order
-      // Review Grid below the picker.
+      // Review Grid below the picker. The new tables come from
+      // db/program-priority.sql — tolerate their absence so the
+      // screen still loads if that script hasn't been run yet.
       const [showOrder, suggestions, locked] = await Promise.all([
-        getShowOrder(db, weekId),
-        computePrioritySuggestions(db, weekId),
-        lockedConferences(db, weekId)
+        getShowOrder(db, weekId).catch(() => ({})),
+        computePrioritySuggestions(db, weekId).catch(() => ({})),
+        lockedConferences(db, weekId).catch(() => new Set())
       ]);
       return {
         weekId,
@@ -135,7 +137,7 @@ async function loadFromDb() {
     // position table is written at week-import time (import order) and
     // updated by the commissioner via the Order Review Grid (overrides).
     const TYPE_ORDER = { 'Steal': 0, 'Auto-Commit': 1, 'Commit': 2 };
-    const showOrder = await getShowOrder(db, weekId);
+    const showOrder = await getShowOrder(db, weekId).catch(() => ({}));
     function positionFor(ev) {
       const rt = normalizeRollType(ev.type);
       const block = showOrder?.[ev.conference]?.[rt];
@@ -155,8 +157,8 @@ async function loadFromDb() {
       });
       list.forEach((ev, i) => { ev.confIndex = i; });
     }
-    const lockedConfs = await lockedConferences(db, weekId);
-    const prioritySuggestions = await computePrioritySuggestions(db, weekId);
+    const lockedConfs = await lockedConferences(db, weekId).catch(() => new Set());
+    const prioritySuggestions = await computePrioritySuggestions(db, weekId).catch(() => ({}));
 
     const conferenceList = conferenceOrder
       .filter(c => byConf.has(c))

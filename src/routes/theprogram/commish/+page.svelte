@@ -9,15 +9,34 @@
   let lastSavedAt = $state(null);
   let tempIdCounter = -1;
 
+  // ---- Top-level subtabs ----
+  // Add new entries here to grow the commish view later.
+  const TABS = [
+    { key: 'players', label: 'Player Priority' },
+    { key: 'schools', label: 'School Priority' },
+    { key: 'show', label: 'Show Run' }
+  ];
+  let activeTab = $state('players');
+
   // ---- Coach Priority Lists ----
   let coachPriorities = $state(structuredClone(data.coachPriorities ?? []));
   let cpCsv = $state('');
   let cpUploading = $state(false);
   let cpMessage = $state('');
 
+  // Conference subtabs for the School Priority view. Each school's entries
+  // all carry that school's conference, so we can both list the available
+  // conferences and group schools beneath them.
+  let schoolConf = $state('All');
+  const schoolConferences = $derived(
+    [...new Set(coachPriorities.map(r => r.conference).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+  );
+
   const grouped = $derived(() => {
     const m = new Map();
     for (const r of coachPriorities) {
+      if (schoolConf !== 'All' && r.conference !== schoolConf) continue;
       const k = r.school_name;
       if (!m.has(k)) m.set(k, []);
       m.get(k).push(r);
@@ -139,6 +158,20 @@
 
   <div class="cv-rule" aria-hidden="true"></div>
 
+  <nav class="cv-tabs" role="tablist" aria-label="Commish sections">
+    {#each TABS as tab}
+      <button
+        type="button"
+        role="tab"
+        class="cv-tab"
+        class:active={activeTab === tab.key}
+        aria-selected={activeTab === tab.key}
+        onclick={() => activeTab = tab.key}
+      >{tab.label}</button>
+    {/each}
+  </nav>
+
+  {#if activeTab === 'players'}
   {#if form?.message}
     <div class="tp-alert tp-alert-error">{form.message}</div>
   {/if}
@@ -222,12 +255,35 @@
       </button>
     </div>
   </form>
+  {/if}
 
+  {#if activeTab === 'schools'}
   <section class="cp-section">
     <header class="cp-head">
       <h2>Coach Priority Lists</h2>
       <p>Per-week priorities submitted by each coach. Columns: <code>School, Player, Conference, Priority</code>. Lower priority = higher preference.</p>
     </header>
+
+    <nav class="cv-subtabs" role="tablist" aria-label="Filter schools by conference">
+      <button
+        type="button"
+        role="tab"
+        class="cv-subtab"
+        class:active={schoolConf === 'All'}
+        aria-selected={schoolConf === 'All'}
+        onclick={() => schoolConf = 'All'}
+      >All</button>
+      {#each schoolConferences as conf}
+        <button
+          type="button"
+          role="tab"
+          class="cv-subtab"
+          class:active={schoolConf === conf}
+          aria-selected={schoolConf === conf}
+          onclick={() => schoolConf = conf}
+        >{conf}</button>
+      {/each}
+    </nav>
 
     <div class="cp-upload">
       <label class="tp-label" for="cp-csv">Paste CSV / TSV</label>
@@ -241,8 +297,12 @@
       </div>
     </div>
 
-    {#if coachPriorities.length === 0}
-      <p class="cp-empty">No coach lists submitted for this week.</p>
+    {#if grouped().length === 0}
+      <p class="cp-empty">
+        {coachPriorities.length === 0
+          ? 'No coach lists submitted for this week.'
+          : `No lists in ${schoolConf}.`}
+      </p>
     {:else}
       {#each grouped() as [school, entries] (school)}
         <div class="cp-school">
@@ -269,7 +329,7 @@
       {/each}
     {/if}
 
-    {#if missingSchools.length > 0}
+    {#if schoolConf === 'All' && missingSchools.length > 0}
       <div class="cp-missing">
         <h3>No list submitted</h3>
         <ul>
@@ -278,6 +338,20 @@
       </div>
     {/if}
   </section>
+  {/if}
+
+  {#if activeTab === 'show'}
+  <section class="cv-show">
+    <header class="cp-head">
+      <h2>Show Run</h2>
+      <p>Set the conference order, then roll each event live for the broadcast.</p>
+    </header>
+    <div class="cv-show-actions">
+      <a href="/theprogram/show" class="tp-pill tp-pill-navy">Launch Show Run →</a>
+      <a href="/theprogram/show/export" class="tp-pill tp-pill-small">Download Show CSV</a>
+    </div>
+  </section>
+  {/if}
 </div>
 
 <style>
@@ -334,6 +408,71 @@
     height: 2px;
     background: var(--tp-gold);
     margin: 14px 0 28px;
+  }
+
+  /* ---- Subtabs ---- */
+  .cv-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 28px;
+  }
+  .cv-tab {
+    padding: 9px 18px;
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-navy);
+    border-radius: 999px;
+    color: var(--tp-navy);
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .cv-tab:hover { background: rgba(217, 164, 65, 0.18); }
+  .cv-tab.active {
+    background: var(--tp-navy);
+    color: var(--tp-cream);
+    border-color: var(--tp-gold);
+  }
+
+  /* Conference filter subtabs — lighter, square-ish chips */
+  .cv-subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 22px;
+  }
+  .cv-subtab {
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--tp-pewter);
+    border-radius: 4px;
+    color: var(--tp-navy-dark);
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .cv-subtab:hover { border-color: var(--tp-navy); }
+  .cv-subtab.active {
+    background: var(--tp-gold);
+    border-color: var(--tp-gold);
+    color: var(--tp-navy-dark);
+  }
+
+  /* Show Run tab */
+  .cv-show { margin-top: 8px; }
+  .cv-show-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
   }
 
   /* Spec: table sits directly on the cream page, no wrapper card. */
@@ -429,7 +568,7 @@
     gap: 12px;
   }
   /* ---- Coach Priority Lists section ---- */
-  .cp-section { margin-top: 48px; }
+  .cp-section { margin-top: 8px; }
   .cp-head h2 {
     font-family: var(--tp-display-condensed);
     font-size: 22px;

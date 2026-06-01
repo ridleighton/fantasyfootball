@@ -24,7 +24,7 @@ export async function load() {
   const { weekId, weekNumber } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [rowsRes, confRes, coachRes, schoolsRes] = await Promise.all([
+    const [rowsRes, confRes, coachRes, schoolsRes, schoolPriRes, allSchoolsRes] = await Promise.all([
       db.query(
         `SELECT id, conference, type, player, school, locked, in_original_roll,
                 odds, result, committed_school
@@ -44,7 +44,29 @@ export async function load() {
           ORDER BY school_name, priority`,
         [weekId]
       ).catch(() => ({ rows: [] })),
-      db.query(`SELECT name FROM program_schools ORDER BY name ASC`).catch(() => ({ rows: [] }))
+      db.query(`SELECT name FROM program_schools ORDER BY name ASC`).catch(() => ({ rows: [] })),
+      // Standing school priority (drag list). Position = priority.
+      db.query(
+        `SELECT id, school_name, priority FROM program_school_priority
+          ORDER BY priority ASC`
+      ).catch(() => ({ rows: [] })),
+      // Union of every school name we've ever seen — drives the School
+      // Priority drag list even when program_schools is sparse.
+      db.query(`
+        SELECT DISTINCT school AS name FROM (
+          SELECT name AS school FROM program_schools
+          UNION
+          SELECT school FROM program_photos
+            WHERE school IS NOT NULL AND TRIM(school) <> ''
+          UNION
+          SELECT school FROM program_roll_events
+            WHERE school IS NOT NULL AND TRIM(school) <> ''
+          UNION
+          SELECT committed_school FROM program_roll_events
+            WHERE committed_school IS NOT NULL AND TRIM(committed_school) <> ''
+        ) u
+        ORDER BY school ASC
+      `).catch(() => ({ rows: [] }))
     ]);
     return {
       weekId,
@@ -53,7 +75,9 @@ export async function load() {
       conferences: confRes.rows.map(r => r.name),
       types: TYPES,
       coachPriorities: coachRes.rows,
-      schools: schoolsRes.rows.map(r => r.name)
+      schools: schoolsRes.rows.map(r => r.name),
+      schoolPriority: schoolPriRes.rows,
+      schoolsForPriority: allSchoolsRes.rows.map(r => r.name)
     };
   } finally {
     await db.end();

@@ -218,6 +218,45 @@
     (data.schools ?? []).filter(s => !submittedSchools.has(s.toLowerCase())).sort()
   );
 
+  // ---- School Priority (standing drag list, program_school_priority) ----
+  // Initial order: existing ranks first, then every other known school.
+  // Position in the list = priority value on save.
+  function buildSpInitial() {
+    const known = new Map((data.schoolPriority ?? []).map(r => [r.school_name.toLowerCase(), r.school_name]));
+    const ordered = (data.schoolPriority ?? []).map(r => r.school_name);
+    for (const name of data.schoolsForPriority ?? []) {
+      if (!known.has((name ?? '').toLowerCase())) ordered.push(name);
+    }
+    return ordered.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
+  }
+  let spItems = $state(buildSpInitial());
+  let spMessage = $state('');
+  let spSaveTimer = null;
+
+  function handleSpConsider(e) {
+    spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
+  }
+  function handleSpFinalize(e) {
+    spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
+    if (spSaveTimer) clearTimeout(spSaveTimer);
+    spSaveTimer = setTimeout(saveSchoolPriority, 300);
+  }
+  async function saveSchoolPriority() {
+    spMessage = 'Saving…';
+    try {
+      const r = await fetch('/theprogram/config/school-priority', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_schools: spItems.map(i => i.name) })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      spMessage = `Saved ${body.count} school${body.count === 1 ? '' : 's'}.`;
+    } catch (e) {
+      spMessage = `Save failed: ${e.message}`;
+    }
+  }
+
   async function uploadCoachPriorities() {
     if (!cpCsv.trim()) { cpMessage = 'Paste a CSV first.'; return; }
     cpUploading = true; cpMessage = '';
@@ -425,9 +464,7 @@
       </button>
     </div>
   </form>
-  {/if}
 
-  {#if activeTab === 'schools'}
   <section class="cp-section">
     <header class="cp-head">
       <h2>Coach Priority Lists</h2>
@@ -507,6 +544,30 @@
         </ul>
       </div>
     {/if}
+  </section>
+  {/if}
+
+  {#if activeTab === 'schools'}
+  <section class="sp-section">
+    <header class="cp-head">
+      <h2>School Priority</h2>
+      <p>Drag schools into the order that decides ties when coach lists conflict. Top of the list = priority 1. Saves automatically.</p>
+    </header>
+    <ul
+      class="sp-list"
+      use:dndzone={{ items: spItems, flipDurationMs: 150, dropTargetStyle: {} }}
+      onconsider={handleSpConsider}
+      onfinalize={handleSpFinalize}
+    >
+      {#each spItems as item (item.id)}
+        <li class="sp-item">
+          <span class="sp-pri">{item.position}</span>
+          <span class="sp-name">{item.name}</span>
+          <span class="sp-grip" aria-hidden="true">⋮⋮</span>
+        </li>
+      {/each}
+    </ul>
+    {#if spMessage}<span class="sp-msg">{spMessage}</span>{/if}
   </section>
   {/if}
 
@@ -967,4 +1028,33 @@
     margin: 0 0 8px;
   }
   .cp-missing ul { margin: 0; padding-left: 18px; color: var(--tp-pewter-deep); }
+
+  /* ---- School Priority drag list ---- */
+  .sp-section { margin-top: 8px; }
+  .sp-msg { font-size: 13px; color: var(--tp-navy-dark); font-style: italic; }
+  .sp-list { list-style: none; margin: 0; padding: 0; max-width: 480px; }
+  .sp-item {
+    display: grid;
+    grid-template-columns: 40px 1fr 24px;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-pewter);
+    border-radius: 3px;
+    margin-bottom: 6px;
+    font-family: var(--tp-body);
+    color: var(--tp-navy-dark);
+    cursor: grab;
+  }
+  .sp-item:active { cursor: grabbing; }
+  .sp-pri {
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--tp-navy);
+    letter-spacing: 0.06em;
+  }
+  .sp-name { font-size: 14px; }
+  .sp-grip { color: var(--tp-pewter-deep); font-weight: 700; user-select: none; }
 </style>

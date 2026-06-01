@@ -56,6 +56,27 @@ export async function GET() {
           };
         });
 
+        // Comparative reasons: for each row, find the recruits whose order
+        // flips relative to it. A row that moves UP is now ranked ahead of
+        // recruits that used to be in front of it (`passes`); a row that
+        // moves DOWN is now behind recruits that used to trail it
+        // (`passedBy`). These names drive the "ranked higher than X" copy.
+        for (const r of rows) {
+          if (r.suggestedPosition == null) { r.passes = []; r.passedBy = []; continue; }
+          r.passes = rows
+            .filter(o => o !== r && o.suggestedPosition != null
+              && o.currentPosition < r.currentPosition
+              && o.suggestedPosition > r.suggestedPosition)
+            .sort((a, b) => a.suggestedPosition - b.suggestedPosition)
+            .map(o => o.player);
+          r.passedBy = rows
+            .filter(o => o !== r && o.suggestedPosition != null
+              && o.currentPosition > r.currentPosition
+              && o.suggestedPosition < r.suggestedPosition)
+            .sort((a, b) => a.suggestedPosition - b.suggestedPosition)
+            .map(o => o.player);
+        }
+
         if (rows.length) blocks.push({ conference: conf, rollType, rows });
       }
     }

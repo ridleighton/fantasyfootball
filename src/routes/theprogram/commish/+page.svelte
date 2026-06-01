@@ -47,16 +47,36 @@
       }));
   });
 
-  // Build the recommendation text for one row, e.g.
-  // "Move up 2 — coach priority #1 and school priority #2".
-  function moveAdvice(row) {
-    if (row.suggestedPosition == null) return { dir: 'none', text: 'No priority data' };
+  // Join a list of recruit names for prose, truncating long lists.
+  function nameList(names) {
+    if (!names || names.length === 0) return '';
+    if (names.length <= 2) return names.join(' and ');
+    return `${names.slice(0, 2).join(', ')} and ${names.length - 2} other${names.length - 2 === 1 ? '' : 's'}`;
+  }
+
+  // The priority basis for a recruit, e.g. "coach priority #1, school priority #2".
+  function priorityBasis(row) {
     const bits = [];
     if (row.coachPriority != null) bits.push(`coach priority #${row.coachPriority}`);
     if (row.schoolPriority != null) bits.push(`school priority #${row.schoolPriority}`);
-    const basis = bits.join(' and ');
-    if (row.delta > 0) return { dir: 'up', text: `Move up ${row.delta}${basis ? ` — ${basis}` : ''}` };
-    if (row.delta < 0) return { dir: 'down', text: `Move down ${-row.delta}${basis ? ` — ${basis}` : ''}` };
+    return bits.join(', ');
+  }
+
+  // Build the recommendation text for one row, e.g.
+  // "Move up 2 — ranked higher than Jane Doe (coach priority #1)".
+  function moveAdvice(row) {
+    if (row.suggestedPosition == null) return { dir: 'none', text: 'No priority data' };
+    const basis = priorityBasis(row);
+    if (row.delta > 0) {
+      const who = nameList(row.passes);
+      const reason = who ? `ranked higher than ${who}` : (basis || 'higher priority');
+      return { dir: 'up', text: `Move up ${row.delta} — ${reason}${basis && who ? ` (${basis})` : ''}` };
+    }
+    if (row.delta < 0) {
+      const who = nameList(row.passedBy);
+      const reason = who ? `${who} rank${row.passedBy.length === 1 ? 's' : ''} higher` : (basis || 'lower priority');
+      return { dir: 'down', text: `Move down ${-row.delta} — ${reason}` };
+    }
     return { dir: 'hold', text: basis ? `Holds — ${basis}` : 'In suggested spot' };
   }
 

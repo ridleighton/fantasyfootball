@@ -243,21 +243,34 @@ export function normalizeScore(raw, min, max) {
   return ((raw - min) / (max - min)) * 100;
 }
 
-// Weighted blend per spec: 0.5 / 0.3 / 0.2.
-// Missing components contribute their weight back to the remaining ones
-// proportionally so a player with only a coach score isn't unfairly
-// boosted by phantom zeros at the lower levels.
+// Weighted blend: coach priority dominates, then player ranking, then the
+// standing school ranking last. A missing component (e.g. no coach
+// priority for this recruit) contributes nothing AND gives its weight back
+// to the others proportionally — so coach is only ever weighed when a coach
+// priority actually exists; it never injects a phantom zero.
 export function blendScores({ coach, school, tierRank }) {
   const parts = [];
-  if (coach != null) parts.push({ w: 0.5, v: coach });
-  if (school != null) parts.push({ w: 0.3, v: school });
-  if (tierRank != null) parts.push({ w: 0.2, v: tierRank });
+  if (coach != null) parts.push({ w: 0.55, v: coach });
+  if (tierRank != null) parts.push({ w: 0.30, v: tierRank });
+  if (school != null) parts.push({ w: 0.15, v: school });
   if (parts.length === 0) return null;
   const totalW = parts.reduce((a, p) => a + p.w, 0);
   return parts.reduce((a, p) => a + (p.v * p.w / totalW), 0);
 }
 
 // ---------------- Priority resolution ----------------
+
+// Recruiting cap per school. Open slots = COMMIT_CAP minus the recruits a
+// school has already committed this week. Fewer open slots = more urgency,
+// so a near-full school wins coach-priority conflicts.
+export const COMMIT_CAP = 15;
+// When a coach-priority conflict falls to the standing school ranking, that
+// ranking only decides if the gap between the two schools is meaningful:
+// within SCHOOL_TOO_CLOSE spots is "too close to call", more than
+// SCHOOL_HUGE_GAP apart is "not a real head-to-head" — both defer to the
+// player ranking instead.
+const SCHOOL_TOO_CLOSE = 1;
+const SCHOOL_HUGE_GAP = 5;
 
 // Produce per-player suggestion records for every block in the week.
 // Output shape:
@@ -287,6 +300,24 @@ export async function computePrioritySuggestions(db, weekId) {
   const playerRank = new Map(
     rankingsRes.rows.map(r => [lower(r.player_name), { tier: r.tier, rank: r.rank }])
   );
+
+  // Recruits already committed to each school this week → open slots.
+  // Dedupe by recruit (player+conference) since a recruit has one row per
+  // candidate school but only one committed_school.
+  const committedBySchool = new Map();
+  {
+    const seenEvent = new Set();
+    for (const r of eventRows) {
+      const cs = (r.committed_school ?? '').trim();
+      if (!cs) continue;
+      const evKey = `${lower(r.player)}|${lower(r.conference ?? '')}`;
+      if (seenEvent.has(evKey)) continue;
+      seenEvent.add(evKey);
+      committedBySchool.set(lower(cs), (committedBySchool.get(lower(cs)) ?? 0) + 1);
+    }
+  }
+  const openSlots = (school) =>
+    Math.max(0, COMMIT_CAP - (committedBySchool.get(lower(school)) ?? 0));
 
   const blocks = groupRowsForOrder(eventRows);
   const out = {};
@@ -323,37 +354,54 @@ export async function computePrioritySuggestions(db, weekId) {
         }
       }
 
-      // Level 2: school priority. Only used to resolve Level 1 conflicts
-      // OR as a standalone score input when the blend reaches it.
+      // Conflict resolution + school blend input. When coach lists conflict
+      // we pick a "winning" school whose coach priority is adopted, in order:
+      //   (a) fewest open recruiting slots (most urgent),
+      //   (b) if tied on slots, the standing school ranking — but only when
+      //       the gap is meaningful (not too close, not a huge gap),
+      //   (c) otherwise leave the conflict unresolved → player ranking wins.
       let schoolScoreRaw = null;
       let schoolResolvedCoach = false;
+      let slotsResolvedCoach = false;
+      let resolvedSchoolName = null;
       if (subs.length > 0) {
-        // Determine the "winning" school: lowest (best) school priority
-        // among the submitting schools. Schools without an explicit
-        // priority sort to last (assigned Infinity).
-        const withPri = subs.map(s => ({
+        const withMeta = subs.map(s => ({
           sub: s,
+          name: s.school_name,
           schoolPri: schoolPri.has(lower(s.school_name))
             ? schoolPri.get(lower(s.school_name))
-            : Infinity
+            : Infinity,
+          open: openSlots(s.school_name)
         }));
-        const minSchoolPri = Math.min(...withPri.map(w => w.schoolPri));
-        const winners = withPri.filter(w => w.schoolPri === minSchoolPri);
+        // School blend component: best (lowest) standing priority among subs.
+        const minSchoolPri = Math.min(...withMeta.map(w => w.schoolPri));
         schoolScoreRaw = Number.isFinite(minSchoolPri) ? minSchoolPri : null;
-        if (coachConflict && winners.length === 1) {
-          // Level 2 resolved the Level 1 conflict — adopt the winning
-          // school's coach priority as the coach score.
-          coachScoreRaw = winners[0].sub.priority;
-          coachConflict = false;
-          schoolResolvedCoach = true;
-        } else if (coachConflict && winners.length > 1) {
-          // Tied on school priority too → both Level 1 and Level 2
-          // inconclusive. Fall through to Level 3.
-          const winnerPriorities = new Set(winners.map(w => w.sub.priority));
-          if (winnerPriorities.size === 1) {
-            coachScoreRaw = [...winnerPriorities][0];
+
+        if (coachConflict) {
+          // (a) Fewest open slots wins.
+          const minOpen = Math.min(...withMeta.map(w => w.open));
+          const openWinners = withMeta.filter(w => w.open === minOpen);
+          if (openWinners.length === 1) {
+            coachScoreRaw = openWinners[0].sub.priority;
+            resolvedSchoolName = openWinners[0].name;
             coachConflict = false;
-            schoolResolvedCoach = true;
+            slotsResolvedCoach = true;
+          } else {
+            // (b) Slots tied → standing school ranking, if decisive.
+            const sorted = [...openWinners].sort((a, b) => a.schoolPri - b.schoolPri);
+            const best = sorted[0];
+            const uniqueBest = sorted.filter(w => w.schoolPri === best.schoolPri).length === 1;
+            const runnerUp = sorted.find(w => w.schoolPri !== best.schoolPri);
+            const gap = runnerUp ? runnerUp.schoolPri - best.schoolPri : Infinity;
+            const decisive = Number.isFinite(best.schoolPri)
+              && gap > SCHOOL_TOO_CLOSE && gap <= SCHOOL_HUGE_GAP;
+            if (uniqueBest && decisive) {
+              coachScoreRaw = best.sub.priority;
+              resolvedSchoolName = best.name;
+              coachConflict = false;
+              schoolResolvedCoach = true;
+            }
+            // else (c): coachConflict stays true → player ranking decides.
           }
         }
       }
@@ -365,12 +413,12 @@ export async function computePrioritySuggestions(db, weekId) {
 
       // Decide order_source label.
       let orderSource;
-      if (coachScoreRaw != null && !coachConflict && !schoolResolvedCoach && subs.length > 0) {
-        orderSource = 'coach';
+      if (slotsResolvedCoach) {
+        orderSource = 'slots';
       } else if (schoolResolvedCoach) {
         orderSource = 'school';
-      } else if (subs.length === 0 || (coachConflict && schoolScoreRaw == null)) {
-        orderSource = 'tier_rank';
+      } else if (coachScoreRaw != null && !coachConflict && subs.length > 0) {
+        orderSource = 'coach';
       } else {
         orderSource = 'tier_rank';
       }
@@ -385,20 +433,22 @@ export async function computePrioritySuggestions(db, weekId) {
       if (subs.length === 0 && !hasRanking) {
         reason = 'No coach list or ranking data — suggested position matches import order';
       } else if (subs.length === 0 && hasRanking) {
-        reason = `No coach list — tier ${ranking.tier}, rank ${ranking.rank} places this player at #__POS__`;
+        reason = `No coach list — player tier ${ranking.tier}, rank ${ranking.rank} places this recruit at #__POS__`;
       } else if (orderSource === 'coach') {
-        reason = `Coach lists rank this player #${coachScoreRaw} within this block — clean Level 1 resolution`;
+        reason = `Coach list ranks this recruit #${coachScoreRaw} within this block`;
+      } else if (orderSource === 'slots') {
+        const open = openSlots(resolvedSchoolName);
+        reason = `Coach lists conflict — ${resolvedSchoolName} has the fewest open slots (${open} of ${COMMIT_CAP}); its #${coachScoreRaw} is used`;
       } else if (orderSource === 'school') {
-        const winSchool = subs.find(s => s.priority === coachScoreRaw)?.school_name ?? '?';
-        const winPri = schoolPri.get(lower(winSchool));
-        reason = `Coach lists conflict — school priority (${winSchool} #${winPri ?? 'unset'}) places this player at #__POS__`;
+        const winPri = schoolPri.get(lower(resolvedSchoolName));
+        reason = `Coach lists conflict, slots tied — ${resolvedSchoolName} ranks higher on school priority (#${winPri ?? 'unset'}); its #${coachScoreRaw} is used`;
       } else if (coachConflict) {
         reason = hasRanking
-          ? `Coach lists conflict, school priority tied — tier ${ranking.tier}, rank ${ranking.rank} places this player at #__POS__`
+          ? `Coach lists conflict, schools too close or too far apart — player tier ${ranking.tier}, rank ${ranking.rank} places this recruit at #__POS__`
           : 'Coach lists conflict and no ranking data — sorted to bottom';
       } else {
         reason = hasRanking
-          ? `Blended — tier ${ranking.tier}, rank ${ranking.rank} contributes Level 3`
+          ? `Blended — player tier ${ranking.tier}, rank ${ranking.rank}`
           : 'Blended — partial signal';
       }
 

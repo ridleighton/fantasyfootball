@@ -14,9 +14,51 @@
   const TABS = [
     { key: 'players', label: 'Player Priority' },
     { key: 'schools', label: 'School Priority' },
+    { key: 'suggested', label: 'Suggested Order' },
     { key: 'show', label: 'Show Run' }
   ];
   let activeTab = $state('players');
+
+  // ---- Suggested order (priority-based recommendations) ----
+  // Display order for roll-type blocks within a conference.
+  const ROLL_TYPE_ORDER = ['steal', 'auto-commit', 'commit'];
+  const ROLL_TYPE_LABELS = { steal: 'Steal', 'auto-commit': 'Auto-Commit', commit: 'Commit' };
+  const SOURCE_LABELS = { coach: 'Coach', school: 'School', tier_rank: 'Tier/Rank' };
+  let suggestions = $state(null);
+  let suggestLoading = $state(false);
+  let suggestError = $state('');
+  let suggestRanAt = $state(null);
+
+  // Flatten the { conf: { rollType: [...] } } shape into an ordered list of
+  // conference -> blocks for rendering.
+  const suggestedConferences = $derived(() => {
+    if (!suggestions) return [];
+    return Object.keys(suggestions)
+      .sort((a, b) => a.localeCompare(b))
+      .map(conf => ({
+        conference: conf,
+        blocks: ROLL_TYPE_ORDER
+          .filter(rt => suggestions[conf]?.[rt]?.length)
+          .map(rt => ({ rollType: rt, players: suggestions[conf][rt] }))
+      }))
+      .filter(c => c.blocks.length > 0);
+  });
+
+  async function runSuggestedOrder() {
+    suggestLoading = true;
+    suggestError = '';
+    try {
+      const r = await fetch('/theprogram/commish/suggested-order');
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      suggestions = body.suggestions ?? {};
+      suggestRanAt = new Date().toLocaleTimeString();
+    } catch (e) {
+      suggestError = `Could not compute suggestions: ${e.message}`;
+    } finally {
+      suggestLoading = false;
+    }
+  }
 
   // The "original list" of recruits = every roll event EXCEPT flagged
   // late-joiners (in_original_roll === false). A null/unset flag means the
@@ -347,6 +389,58 @@
   </section>
   {/if}
 
+  {#if activeTab === 'suggested'}
+  <section class="cv-suggest">
+    <header class="cp-head">
+      <h2>Suggested Order</h2>
+      <p>Priority-based recommendation built from coach lists, school priority, and player rankings. Read-only — apply an order by dragging in the <a href="/theprogram/show">Show Run</a> order review.</p>
+    </header>
+
+    <div class="cv-suggest-actions">
+      <button type="button" class="tp-pill tp-pill-navy" onclick={runSuggestedOrder} disabled={suggestLoading}>
+        {suggestLoading ? 'Computing…' : 'Run Suggested Order'}
+      </button>
+      {#if suggestRanAt}<span class="cv-saved">Computed at {suggestRanAt}</span>{/if}
+    </div>
+
+    {#if suggestError}
+      <div class="tp-alert tp-alert-error">{suggestError}</div>
+    {/if}
+
+    {#if suggestions !== null}
+      {#if suggestedConferences().length === 0}
+        <p class="cp-empty">No recruits to order. Add rows on the Player Priority tab first.</p>
+      {:else}
+        {#each suggestedConferences() as conf (conf.conference)}
+          <div class="cv-sg-conf">
+            <h3>{conf.conference}</h3>
+            {#each conf.blocks as block (block.rollType)}
+              <div class="cv-sg-block">
+                <h4>{ROLL_TYPE_LABELS[block.rollType] ?? block.rollType}</h4>
+                <table class="cp-table cv-sg-table">
+                  <thead>
+                    <tr><th>#</th><th>Player</th><th>Source</th><th>Reason</th></tr>
+                  </thead>
+                  <tbody>
+                    {#each block.players as p (p.player)}
+                      <tr>
+                        <td class="cv-sg-pos">{p.suggestedPosition}</td>
+                        <td>{p.player}</td>
+                        <td><span class="cv-sg-src cv-sg-src-{p.orderSource}">{SOURCE_LABELS[p.orderSource] ?? p.orderSource}</span></td>
+                        <td class="cv-sg-reason">{p.reason}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/each}
+          </div>
+        {/each}
+      {/if}
+    {/if}
+  </section>
+  {/if}
+
   {#if activeTab === 'show'}
   <section class="cv-show">
     <header class="cp-head">
@@ -527,6 +621,62 @@
   }
   .cv-orig-table td { padding: 6px 10px; }
   .cv-orig-table th { padding: 8px 10px; }
+
+  /* Suggested order */
+  .cv-suggest { margin-top: 8px; }
+  .cv-suggest-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 0 28px;
+  }
+  .cv-sg-conf { margin-bottom: 34px; }
+  .cv-sg-conf > h3 {
+    font-family: var(--tp-display-condensed);
+    font-size: 18px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--tp-navy);
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
+  }
+  .cv-sg-block { margin-bottom: 18px; }
+  .cv-sg-block > h4 {
+    font-family: var(--tp-display-condensed);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-oxblood);
+    margin: 0 0 6px;
+  }
+  .cv-sg-table { table-layout: auto; }
+  .cv-sg-table td { padding: 6px 10px; vertical-align: top; }
+  .cv-sg-table th { padding: 8px 10px; }
+  .cv-sg-pos {
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    width: 36px;
+    text-align: center;
+  }
+  .cv-sg-reason { color: var(--tp-navy-dark); font-size: 13px; font-style: italic; }
+  .cv-sg-src {
+    display: inline-block;
+    font-family: var(--tp-display-condensed);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--tp-pewter);
+    color: var(--tp-navy-dark);
+    white-space: nowrap;
+  }
+  .cv-sg-src-coach  { background: var(--tp-gold); border-color: var(--tp-gold); }
+  .cv-sg-src-school { background: var(--tp-cream-2); }
+  .cv-sg-src-tier_rank { background: transparent; color: var(--tp-pewter-deep); }
 
   /* Spec: table sits directly on the cream page, no wrapper card. */
   .cv-table-wrap {

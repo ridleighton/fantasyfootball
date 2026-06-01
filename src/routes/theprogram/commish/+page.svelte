@@ -18,10 +18,12 @@
   ];
   let activeTab = $state('players');
 
-  // The "original list" of recruits = roll events flagged as in the
-  // original roll. Reads from the live (possibly unsaved) rows state so
-  // the Show Run view reflects edits made on the Player Priority tab.
-  const originalRecruits = $derived(rows.filter(r => r.in_original_roll === true));
+  // The "original list" of recruits = every roll event EXCEPT flagged
+  // late-joiners (in_original_roll === false). A null/unset flag means the
+  // recruit was in the original roll by default — matching the show's
+  // late-joiner logic in show.js. Reads from the live (possibly unsaved)
+  // rows state so the view reflects edits on the Player Priority tab.
+  const originalRecruits = $derived(rows.filter(r => r.in_original_roll !== false));
 
   // ---- Coach Priority Lists ----
   let coachPriorities = $state(structuredClone(data.coachPriorities ?? []));
@@ -359,7 +361,7 @@
     <div class="cv-orig">
       <h3>Original Recruit List</h3>
       {#if originalRecruits.length === 0}
-        <p class="cp-empty">No recruits flagged as in the original roll. Set <strong>In Orig.</strong> to Yes on the Player Priority tab.</p>
+        <p class="cp-empty">No recruits yet. Add rows on the Player Priority tab (recruits not flagged <strong>In Orig. = No</strong> appear here).</p>
       {:else}
         <table class="cp-table cv-orig-table">
           <thead>

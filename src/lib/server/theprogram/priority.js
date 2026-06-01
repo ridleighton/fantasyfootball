@@ -270,7 +270,7 @@ export const COMMIT_CAP = 15;
 // SCHOOL_HUGE_GAP apart is "not a real head-to-head" — both defer to the
 // player ranking instead.
 const SCHOOL_TOO_CLOSE = 1;
-const SCHOOL_HUGE_GAP = 5;
+const SCHOOL_HUGE_GAP = 8;
 
 // Produce per-player suggestion records for every block in the week.
 // Output shape:

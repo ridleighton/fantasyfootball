@@ -606,14 +606,20 @@
                     <span class="cv-sg-locked">Locked — roll executed</span>
                   {:else}
                     <div class="cv-sg-block-actions">
-                      <button type="button" class="tp-pill tp-pill-small tp-pill-gold" onclick={() => applySuggested(block)}>Apply suggested</button>
+                      {#if block.hasSuggestions}
+                        <button type="button" class="tp-pill tp-pill-small tp-pill-gold" onclick={() => applySuggested(block)}>Apply suggested</button>
+                      {/if}
                       <button type="button" class="tp-pill tp-pill-small" onclick={() => resetBlock(block)}>Reset to import</button>
                     </div>
                   {/if}
                 </div>
                 <table class="cp-table cv-sg-table">
                   <thead>
-                    <tr><th>#</th><th>Player</th><th>Suggested</th><th>Recommendation</th><th aria-label="drag"></th></tr>
+                    {#if block.hasSuggestions}
+                      <tr><th>#</th><th>Player</th><th>Suggested</th><th>Recommendation</th><th aria-label="drag"></th></tr>
+                    {:else}
+                      <tr><th>#</th><th>Player</th><th aria-label="drag"></th></tr>
+                    {/if}
                   </thead>
                   <tbody
                     use:dndzone={{ items, flipDurationMs: 150, dragDisabled: block.locked, dropTargetStyle: {} }}
@@ -625,12 +631,14 @@
                       <tr class:cv-sg-locked-row={block.locked}>
                         <td class="cv-sg-pos">{row.currentPosition}</td>
                         <td>{row.player}</td>
-                        <td class="cv-sg-pos">
-                          {row.suggestedPosition ?? '—'}
-                          {#if advice.dir === 'up'}<span class="cv-sg-arrow up">▲</span>{/if}
-                          {#if advice.dir === 'down'}<span class="cv-sg-arrow down">▼</span>{/if}
-                        </td>
-                        <td class="cv-sg-rec cv-sg-rec-{advice.dir}">{advice.text}</td>
+                        {#if block.hasSuggestions}
+                          <td class="cv-sg-pos">
+                            {row.suggestedPosition ?? '—'}
+                            {#if advice.dir === 'up'}<span class="cv-sg-arrow up">▲</span>{/if}
+                            {#if advice.dir === 'down'}<span class="cv-sg-arrow down">▼</span>{/if}
+                          </td>
+                          <td class="cv-sg-rec cv-sg-rec-{advice.dir}">{advice.text}</td>
+                        {/if}
                         <td class="cv-sg-grip" aria-hidden="true">{block.locked ? '' : '⋮⋮'}</td>
                       </tr>
                     {/each}

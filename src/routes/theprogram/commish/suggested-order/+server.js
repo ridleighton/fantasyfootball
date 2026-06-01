@@ -38,6 +38,10 @@ export async function GET() {
         const byPlayer = new Map();
         for (const s of suggested) byPlayer.set(s.player.toLowerCase(), s);
 
+        // Priority suggestions only apply to Commit blocks. Steals and
+        // Auto-Commits are still reorderable, but carry no suggestion.
+        const hasSuggestions = rollType === 'commit';
+
         // Emit rows in the actual show-run order. If no saved order exists
         // yet, fall back to the suggested ordering.
         const base = current.length
@@ -45,7 +49,7 @@ export async function GET() {
           : suggested.map((s, i) => ({ player: s.player, position: i + 1, orderSource: 'suggested' }));
 
         const rows = base.map(row => {
-          const s = byPlayer.get(row.player.toLowerCase());
+          const s = hasSuggestions ? byPlayer.get(row.player.toLowerCase()) : null;
           return {
             player: row.player,
             orderSource: row.orderSource,
@@ -57,7 +61,7 @@ export async function GET() {
         });
 
         if (rows.length) {
-          blocks.push({ conference: conf, rollType, locked: locked.has(conf), rows });
+          blocks.push({ conference: conf, rollType, locked: locked.has(conf), hasSuggestions, rows });
         }
       }
     }

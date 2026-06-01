@@ -18,6 +18,11 @@
   ];
   let activeTab = $state('players');
 
+  // The "original list" of recruits = roll events flagged as in the
+  // original roll. Reads from the live (possibly unsaved) rows state so
+  // the Show Run view reflects edits made on the Player Priority tab.
+  const originalRecruits = $derived(rows.filter(r => r.in_original_roll === true));
+
   // ---- Coach Priority Lists ----
   let coachPriorities = $state(structuredClone(data.coachPriorities ?? []));
   let cpCsv = $state('');
@@ -350,6 +355,38 @@
       <a href="/theprogram/show" class="tp-pill tp-pill-navy">Launch Show Run →</a>
       <a href="/theprogram/show/export" class="tp-pill tp-pill-small">Download Show CSV</a>
     </div>
+
+    <div class="cv-orig">
+      <h3>Original Recruit List</h3>
+      {#if originalRecruits.length === 0}
+        <p class="cp-empty">No recruits flagged as in the original roll. Set <strong>In Orig.</strong> to Yes on the Player Priority tab.</p>
+      {:else}
+        <table class="cp-table cv-orig-table">
+          <thead>
+            <tr>
+              <th>Conference</th>
+              <th>Recruit</th>
+              <th>School</th>
+              <th>Odds</th>
+              <th>Result</th>
+              <th>Committed School</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each originalRecruits as r (r.id)}
+              <tr>
+                <td>{r.conference ?? ''}</td>
+                <td>{r.player ?? ''}</td>
+                <td>{r.school ?? ''}</td>
+                <td>{r.odds ?? ''}</td>
+                <td>{r.result ?? ''}</td>
+                <td>{r.committed_school ?? ''}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </div>
   </section>
   {/if}
 </div>
@@ -474,6 +511,20 @@
     gap: 12px;
     margin-top: 18px;
   }
+  .cv-orig { margin-top: 36px; }
+  .cv-orig h3 {
+    font-family: var(--tp-display-condensed);
+    font-size: 16px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tp-navy-dark);
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--tp-navy);
+    box-shadow: 0 4px 0 -2px var(--tp-gold);
+  }
+  .cv-orig-table td { padding: 6px 10px; }
+  .cv-orig-table th { padding: 8px 10px; }
 
   /* Spec: table sits directly on the cream page, no wrapper card. */
   .cv-table-wrap {

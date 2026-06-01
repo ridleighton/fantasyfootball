@@ -23,26 +23,42 @@
   // Display order for roll-type blocks within a conference.
   const ROLL_TYPE_ORDER = ['steal', 'auto-commit', 'commit'];
   const ROLL_TYPE_LABELS = { steal: 'Steal', 'auto-commit': 'Auto-Commit', commit: 'Commit' };
-  const SOURCE_LABELS = { coach: 'Coach', school: 'School', tier_rank: 'Tier/Rank' };
-  let suggestions = $state(null);
+  let suggestBlocks = $state(null);
   let suggestLoading = $state(false);
   let suggestError = $state('');
   let suggestRanAt = $state(null);
 
-  // Flatten the { conf: { rollType: [...] } } shape into an ordered list of
-  // conference -> blocks for rendering.
+  // Group the flat blocks list by conference, ordering roll-type blocks by
+  // the show's Steal → Auto-Commit → Commit convention.
   const suggestedConferences = $derived(() => {
-    if (!suggestions) return [];
-    return Object.keys(suggestions)
-      .sort((a, b) => a.localeCompare(b))
-      .map(conf => ({
-        conference: conf,
-        blocks: ROLL_TYPE_ORDER
-          .filter(rt => suggestions[conf]?.[rt]?.length)
-          .map(rt => ({ rollType: rt, players: suggestions[conf][rt] }))
-      }))
-      .filter(c => c.blocks.length > 0);
+    if (!suggestBlocks) return [];
+    const byConf = new Map();
+    for (const b of suggestBlocks) {
+      if (!byConf.has(b.conference)) byConf.set(b.conference, []);
+      byConf.get(b.conference).push(b);
+    }
+    return [...byConf.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([conference, blocks]) => ({
+        conference,
+        blocks: blocks.sort(
+          (x, y) => ROLL_TYPE_ORDER.indexOf(x.rollType) - ROLL_TYPE_ORDER.indexOf(y.rollType)
+        )
+      }));
   });
+
+  // Build the recommendation text for one row, e.g.
+  // "Move up 2 — coach priority #1 and school priority #2".
+  function moveAdvice(row) {
+    if (row.suggestedPosition == null) return { dir: 'none', text: 'No priority data' };
+    const bits = [];
+    if (row.coachPriority != null) bits.push(`coach priority #${row.coachPriority}`);
+    if (row.schoolPriority != null) bits.push(`school priority #${row.schoolPriority}`);
+    const basis = bits.join(' and ');
+    if (row.delta > 0) return { dir: 'up', text: `Move up ${row.delta}${basis ? ` — ${basis}` : ''}` };
+    if (row.delta < 0) return { dir: 'down', text: `Move down ${-row.delta}${basis ? ` — ${basis}` : ''}` };
+    return { dir: 'hold', text: basis ? `Holds — ${basis}` : 'In suggested spot' };
+  }
 
   async function runSuggestedOrder() {
     suggestLoading = true;
@@ -51,7 +67,7 @@
       const r = await fetch('/theprogram/commish/suggested-order');
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
-      suggestions = body.suggestions ?? {};
+      suggestBlocks = body.blocks ?? [];
       suggestRanAt = new Date().toLocaleTimeString();
     } catch (e) {
       suggestError = `Could not compute suggestions: ${e.message}`;
@@ -393,7 +409,7 @@
   <section class="cv-suggest">
     <header class="cp-head">
       <h2>Suggested Order</h2>
-      <p>Priority-based recommendation built from coach lists, school priority, and player rankings. Read-only — apply an order by dragging in the <a href="/theprogram/show">Show Run</a> order review.</p>
+      <p>The current show-run order with a priority-based recommendation per recruit. Read-only — apply changes by dragging in the <a href="/theprogram/show">Show Run</a> order review.</p>
     </header>
 
     <div class="cv-suggest-actions">
@@ -407,9 +423,9 @@
       <div class="tp-alert tp-alert-error">{suggestError}</div>
     {/if}
 
-    {#if suggestions !== null}
+    {#if suggestBlocks !== null}
       {#if suggestedConferences().length === 0}
-        <p class="cp-empty">No recruits to order. Add rows on the Player Priority tab first.</p>
+        <p class="cp-empty">No show-run order yet. Import a week and add recruits on the Player Priority tab first.</p>
       {:else}
         {#each suggestedConferences() as conf (conf.conference)}
           <div class="cv-sg-conf">
@@ -419,15 +435,20 @@
                 <h4>{ROLL_TYPE_LABELS[block.rollType] ?? block.rollType}</h4>
                 <table class="cp-table cv-sg-table">
                   <thead>
-                    <tr><th>#</th><th>Player</th><th>Source</th><th>Reason</th></tr>
+                    <tr><th>Now</th><th>Player</th><th>Suggested</th><th>Recommendation</th></tr>
                   </thead>
                   <tbody>
-                    {#each block.players as p (p.player)}
+                    {#each block.rows as row (row.player)}
+                      {@const advice = moveAdvice(row)}
                       <tr>
-                        <td class="cv-sg-pos">{p.suggestedPosition}</td>
-                        <td>{p.player}</td>
-                        <td><span class="cv-sg-src cv-sg-src-{p.orderSource}">{SOURCE_LABELS[p.orderSource] ?? p.orderSource}</span></td>
-                        <td class="cv-sg-reason">{p.reason}</td>
+                        <td class="cv-sg-pos">{row.currentPosition}</td>
+                        <td>{row.player}</td>
+                        <td class="cv-sg-pos">
+                          {row.suggestedPosition ?? '—'}
+                          {#if advice.dir === 'up'}<span class="cv-sg-arrow up">▲</span>{/if}
+                          {#if advice.dir === 'down'}<span class="cv-sg-arrow down">▼</span>{/if}
+                        </td>
+                        <td class="cv-sg-rec cv-sg-rec-{advice.dir}">{advice.text}</td>
                       </tr>
                     {/each}
                   </tbody>
@@ -660,23 +681,14 @@
     width: 36px;
     text-align: center;
   }
-  .cv-sg-reason { color: var(--tp-navy-dark); font-size: 13px; font-style: italic; }
-  .cv-sg-src {
-    display: inline-block;
-    font-family: var(--tp-display-condensed);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--tp-pewter);
-    color: var(--tp-navy-dark);
-    white-space: nowrap;
-  }
-  .cv-sg-src-coach  { background: var(--tp-gold); border-color: var(--tp-gold); }
-  .cv-sg-src-school { background: var(--tp-cream-2); }
-  .cv-sg-src-tier_rank { background: transparent; color: var(--tp-pewter-deep); }
+  .cv-sg-arrow { font-size: 10px; margin-left: 4px; }
+  .cv-sg-arrow.up { color: var(--tp-gold-2, #b8860b); }
+  .cv-sg-arrow.down { color: var(--tp-oxblood); }
+  .cv-sg-rec { font-size: 13px; color: var(--tp-navy-dark); }
+  .cv-sg-rec-up { color: var(--tp-gold-2, #b8860b); font-weight: 600; }
+  .cv-sg-rec-down { color: var(--tp-oxblood); font-weight: 600; }
+  .cv-sg-rec-hold { font-style: italic; color: var(--tp-pewter-deep); }
+  .cv-sg-rec-none { font-style: italic; color: var(--tp-pewter-deep); }
 
   /* Spec: table sits directly on the cream page, no wrapper card. */
   .cv-table-wrap {

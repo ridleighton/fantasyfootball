@@ -446,7 +446,11 @@ export async function computePrioritySuggestions(db, weekId) {
       player: r.player,
       suggestedPosition: i + 1,
       reason: r.reason.replace('#__POS__', `#${i + 1}`),
-      orderSource: r.orderSource
+      orderSource: r.orderSource,
+      // Show-order priority inputs, surfaced so the move can be explained
+      // ("coach priority #1, school priority #2"). null when not applicable.
+      coachPriority: r.coachScoreRaw,
+      schoolPriority: r.schoolScoreRaw
     }));
   }
 

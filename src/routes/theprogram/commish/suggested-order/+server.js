@@ -1,22 +1,28 @@
 import { json, error } from '@sveltejs/kit';
 import { createClient } from '$lib/server/db.js';
 import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
-import { computePrioritySuggestions, getShowOrder } from '$lib/server/theprogram/priority.js';
+import {
+  computePrioritySuggestions,
+  getShowOrder,
+  lockedConferences
+} from '$lib/server/theprogram/priority.js';
 
-// Returns the current show-run order for each (conference, roll type) block
-// merged with the priority-based suggestion for each player, so the commish
-// can see — in the order the show will actually run — which recruits should
-// move up or down and why. Read-only: does not write program_show_order.
+// Returns each (conference, roll type) block in its current show-run order,
+// annotated with the priority-based suggestion for every recruit, plus the
+// set of locked conferences (a roll already executed → no reordering). The
+// commish view renders this as a drag-to-reorder list with a live
+// "move up/down because…" recommendation column. Read-only: ordering is
+// committed via /theprogram/show/save-order, not here.
 export async function GET() {
   const { weekId } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [currentOrder, suggestions] = await Promise.all([
+    const [currentOrder, suggestions, locked] = await Promise.all([
       getShowOrder(db, weekId),
-      computePrioritySuggestions(db, weekId)
+      computePrioritySuggestions(db, weekId),
+      lockedConferences(db, weekId)
     ]);
 
-    // Union of conferences/roll types present in either source.
     const confs = new Set([...Object.keys(currentOrder), ...Object.keys(suggestions)]);
     const blocks = [];
 
@@ -29,55 +35,30 @@ export async function GET() {
       for (const rollType of rollTypes) {
         const current = currentOrder[conf]?.[rollType] ?? [];
         const suggested = suggestions[conf]?.[rollType] ?? [];
-
-        // Index suggestions by lowercased player for matching.
         const byPlayer = new Map();
         for (const s of suggested) byPlayer.set(s.player.toLowerCase(), s);
 
-        // Iterate in the actual show-run order (current position). If there
-        // is no saved order yet, fall back to the suggested ordering.
+        // Emit rows in the actual show-run order. If no saved order exists
+        // yet, fall back to the suggested ordering.
         const base = current.length
           ? [...current].sort((a, b) => a.position - b.position)
           : suggested.map((s, i) => ({ player: s.player, position: i + 1, orderSource: 'suggested' }));
 
         const rows = base.map(row => {
           const s = byPlayer.get(row.player.toLowerCase());
-          const suggestedPosition = s?.suggestedPosition ?? null;
-          const delta = suggestedPosition != null ? row.position - suggestedPosition : null;
           return {
             player: row.player,
-            currentPosition: row.position,
-            suggestedPosition,
-            delta, // > 0 means "move up", < 0 means "move down", 0 holds
             orderSource: row.orderSource,
+            suggestedPosition: s?.suggestedPosition ?? null,
             coachPriority: s?.coachPriority ?? null,
             schoolPriority: s?.schoolPriority ?? null,
             reason: s?.reason ?? null
           };
         });
 
-        // Comparative reasons: for each row, find the recruits whose order
-        // flips relative to it. A row that moves UP is now ranked ahead of
-        // recruits that used to be in front of it (`passes`); a row that
-        // moves DOWN is now behind recruits that used to trail it
-        // (`passedBy`). These names drive the "ranked higher than X" copy.
-        for (const r of rows) {
-          if (r.suggestedPosition == null) { r.passes = []; r.passedBy = []; continue; }
-          r.passes = rows
-            .filter(o => o !== r && o.suggestedPosition != null
-              && o.currentPosition < r.currentPosition
-              && o.suggestedPosition > r.suggestedPosition)
-            .sort((a, b) => a.suggestedPosition - b.suggestedPosition)
-            .map(o => o.player);
-          r.passedBy = rows
-            .filter(o => o !== r && o.suggestedPosition != null
-              && o.currentPosition > r.currentPosition
-              && o.suggestedPosition < r.suggestedPosition)
-            .sort((a, b) => a.suggestedPosition - b.suggestedPosition)
-            .map(o => o.player);
+        if (rows.length) {
+          blocks.push({ conference: conf, rollType, locked: locked.has(conf), rows });
         }
-
-        if (rows.length) blocks.push({ conference: conf, rollType, rows });
       }
     }
 

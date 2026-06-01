@@ -1,6 +1,7 @@
 <script>
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
+  import { dndzone } from 'svelte-dnd-action';
 
   let { data, form } = $props();
 
@@ -14,26 +15,52 @@
   const TABS = [
     { key: 'players', label: 'Player Priority' },
     { key: 'schools', label: 'School Priority' },
-    { key: 'suggested', label: 'Suggested Order' },
     { key: 'show', label: 'Show Run' }
   ];
   let activeTab = $state('players');
 
-  // ---- Suggested order (priority-based recommendations) ----
-  // Display order for roll-type blocks within a conference.
+  // ---- Show Run order (drag-to-reorder + priority recommendations) ----
   const ROLL_TYPE_ORDER = ['steal', 'auto-commit', 'commit'];
   const ROLL_TYPE_LABELS = { steal: 'Steal', 'auto-commit': 'Auto-Commit', commit: 'Commit' };
-  let suggestBlocks = $state(null);
-  let suggestLoading = $state(false);
-  let suggestError = $state('');
-  let suggestRanAt = $state(null);
+  // orderBlocks holds the live, drag-reorderable state once loaded:
+  //   [{ conference, rollType, locked, rows: [{ id, player, suggestedPosition, ... }] }]
+  let orderBlocks = $state(null);
+  let orderLoading = $state(false);
+  let orderLoadError = $state('');
+  let orderSaveMsg = $state('');
+  let orderLoadTried = $state(false);
 
-  // Group the flat blocks list by conference, ordering roll-type blocks by
-  // the show's Steal → Auto-Commit → Commit convention.
-  const suggestedConferences = $derived(() => {
-    if (!suggestBlocks) return [];
+  // Auto-load the order the first time the Show Run tab is opened. The
+  // `tried` guard stops a failed fetch from re-firing in a loop; the
+  // Reload Order button re-runs it on demand.
+  $effect(() => {
+    if (activeTab === 'show' && !orderLoadTried && !orderLoading) loadOrder();
+  });
+
+  async function loadOrder() {
+    orderLoading = true;
+    orderLoadTried = true;
+    orderLoadError = '';
+    try {
+      const r = await fetch('/theprogram/commish/suggested-order');
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      orderBlocks = (body.blocks ?? []).map(b => ({
+        ...b,
+        rows: b.rows.map(row => ({ ...row, id: `${b.conference}|${b.rollType}|${row.player}` }))
+      }));
+    } catch (e) {
+      orderLoadError = `Could not load order: ${e.message}`;
+    } finally {
+      orderLoading = false;
+    }
+  }
+
+  // Group blocks by conference, roll types in show order, for rendering.
+  const orderConferences = $derived(() => {
+    if (!orderBlocks) return [];
     const byConf = new Map();
-    for (const b of suggestBlocks) {
+    for (const b of orderBlocks) {
       if (!byConf.has(b.conference)) byConf.set(b.conference, []);
       byConf.get(b.conference).push(b);
     }
@@ -47,23 +74,38 @@
       }));
   });
 
-  // Join a list of recruit names for prose, truncating long lists.
+  // Decorate a block's rows with live position / delta / comparison data
+  // derived from the CURRENT drag order, so the recommendation updates as
+  // recruits are dragged.
+  function decorate(block) {
+    const rows = block.rows.map((r, i) => ({ ...r, currentPosition: i + 1 }));
+    return rows.map(r => {
+      const delta = r.suggestedPosition != null ? r.currentPosition - r.suggestedPosition : null;
+      const passes = rows
+        .filter(o => o.player !== r.player && o.suggestedPosition != null && r.suggestedPosition != null
+          && o.currentPosition < r.currentPosition && o.suggestedPosition > r.suggestedPosition)
+        .sort((a, b) => a.suggestedPosition - b.suggestedPosition)
+        .map(o => o.player);
+      const passedBy = rows
+        .filter(o => o.player !== r.player && o.suggestedPosition != null && r.suggestedPosition != null
+          && o.currentPosition > r.currentPosition && o.suggestedPosition < r.suggestedPosition)
+        .sort((a, b) => a.suggestedPosition - b.suggestedPosition)
+        .map(o => o.player);
+      return { ...r, delta, passes, passedBy };
+    });
+  }
+
   function nameList(names) {
     if (!names || names.length === 0) return '';
     if (names.length <= 2) return names.join(' and ');
     return `${names.slice(0, 2).join(', ')} and ${names.length - 2} other${names.length - 2 === 1 ? '' : 's'}`;
   }
-
-  // The priority basis for a recruit, e.g. "coach priority #1, school priority #2".
   function priorityBasis(row) {
     const bits = [];
     if (row.coachPriority != null) bits.push(`coach priority #${row.coachPriority}`);
     if (row.schoolPriority != null) bits.push(`school priority #${row.schoolPriority}`);
     return bits.join(', ');
   }
-
-  // Build the recommendation text for one row, e.g.
-  // "Move up 2 — ranked higher than Jane Doe (coach priority #1)".
   function moveAdvice(row) {
     if (row.suggestedPosition == null) return { dir: 'none', text: 'No priority data' };
     const basis = priorityBasis(row);
@@ -77,22 +119,65 @@
       const reason = who ? `${who} rank${row.passedBy.length === 1 ? 's' : ''} higher` : (basis || 'lower priority');
       return { dir: 'down', text: `Move down ${-row.delta} — ${reason}` };
     }
-    return { dir: 'hold', text: basis ? `Holds — ${basis}` : 'In suggested spot' };
+    return { dir: 'hold', text: basis ? `In place — ${basis}` : 'In suggested spot' };
   }
 
-  async function runSuggestedOrder() {
-    suggestLoading = true;
-    suggestError = '';
+  // ---- Drag-and-drop ----
+  function onOrderConsider(block, e) {
+    block.rows = e.detail.items;
+  }
+  async function onOrderFinalize(block, e) {
+    block.rows = e.detail.items;
+    await saveBlock(block);
+  }
+
+  async function saveBlock(block) {
+    orderSaveMsg = 'Saving…';
     try {
-      const r = await fetch('/theprogram/commish/suggested-order');
+      const r = await fetch('/theprogram/show/save-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conference: block.conference,
+          roll_type: block.rollType,
+          ordered_players: block.rows.map(row => row.player)
+        })
+      });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
-      suggestBlocks = body.blocks ?? [];
-      suggestRanAt = new Date().toLocaleTimeString();
+      orderSaveMsg = `Saved ${block.conference} · ${ROLL_TYPE_LABELS[block.rollType] ?? block.rollType}.`;
     } catch (e) {
-      suggestError = `Could not compute suggestions: ${e.message}`;
-    } finally {
-      suggestLoading = false;
+      orderSaveMsg = `Save failed: ${e.message}`;
+    }
+  }
+
+  // Apply the suggested order to a block: sort rows by suggestedPosition,
+  // then persist. Recruits with no suggestion keep their relative order.
+  async function applySuggested(block) {
+    const sorted = [...block.rows].sort((a, b) => {
+      const ap = a.suggestedPosition ?? Infinity;
+      const bp = b.suggestedPosition ?? Infinity;
+      return ap - bp;
+    });
+    block.rows = sorted;
+    await saveBlock(block);
+  }
+
+  async function resetBlock(block) {
+    if (!confirm('Reset this block to the original import order?')) return;
+    orderSaveMsg = 'Resetting…';
+    try {
+      const r = await fetch('/theprogram/show/save-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conference: block.conference, roll_type: block.rollType, reset: true })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+      orderSaveMsg = 'Reset to import order.';
+      await loadOrder();
+    } catch (e) {
+      orderSaveMsg = `Reset failed: ${e.message}`;
     }
   }
 
@@ -425,42 +510,58 @@
   </section>
   {/if}
 
-  {#if activeTab === 'suggested'}
-  <section class="cv-suggest">
+  {#if activeTab === 'show'}
+  <section class="cv-show">
     <header class="cp-head">
-      <h2>Suggested Order</h2>
-      <p>The current show-run order with a priority-based recommendation per recruit. Read-only — apply changes by dragging in the <a href="/theprogram/show">Show Run</a> order review.</p>
+      <h2>Show Run</h2>
+      <p>Drag recruits to set the running order for each conference and roll type. The recommendation column shows the priority-based suggestion and updates as you reorder. Changes save automatically.</p>
     </header>
-
-    <div class="cv-suggest-actions">
-      <button type="button" class="tp-pill tp-pill-navy" onclick={runSuggestedOrder} disabled={suggestLoading}>
-        {suggestLoading ? 'Computing…' : 'Run Suggested Order'}
+    <div class="cv-show-actions">
+      <a href="/theprogram/show" class="tp-pill tp-pill-navy">Launch Show Run →</a>
+      <a href="/theprogram/show/export" class="tp-pill tp-pill-small">Download Show CSV</a>
+      <button type="button" class="tp-pill tp-pill-small" onclick={loadOrder} disabled={orderLoading}>
+        {orderLoading ? 'Loading…' : 'Reload Order'}
       </button>
-      {#if suggestRanAt}<span class="cv-saved">Computed at {suggestRanAt}</span>{/if}
+      {#if orderSaveMsg}<span class="cv-saved">{orderSaveMsg}</span>{/if}
     </div>
 
-    {#if suggestError}
-      <div class="tp-alert tp-alert-error">{suggestError}</div>
+    {#if orderLoadError}
+      <div class="tp-alert tp-alert-error">{orderLoadError}</div>
     {/if}
 
-    {#if suggestBlocks !== null}
-      {#if suggestedConferences().length === 0}
+    {#if orderBlocks !== null}
+      {#if orderConferences().length === 0}
         <p class="cp-empty">No show-run order yet. Import a week and add recruits on the Player Priority tab first.</p>
       {:else}
-        {#each suggestedConferences() as conf (conf.conference)}
+        {#each orderConferences() as conf (conf.conference)}
           <div class="cv-sg-conf">
             <h3>{conf.conference}</h3>
             {#each conf.blocks as block (block.rollType)}
+              {@const items = decorate(block)}
               <div class="cv-sg-block">
-                <h4>{ROLL_TYPE_LABELS[block.rollType] ?? block.rollType}</h4>
+                <div class="cv-sg-block-head">
+                  <h4>{ROLL_TYPE_LABELS[block.rollType] ?? block.rollType}</h4>
+                  {#if block.locked}
+                    <span class="cv-sg-locked">Locked — roll executed</span>
+                  {:else}
+                    <div class="cv-sg-block-actions">
+                      <button type="button" class="tp-pill tp-pill-small tp-pill-gold" onclick={() => applySuggested(block)}>Apply suggested</button>
+                      <button type="button" class="tp-pill tp-pill-small" onclick={() => resetBlock(block)}>Reset to import</button>
+                    </div>
+                  {/if}
+                </div>
                 <table class="cp-table cv-sg-table">
                   <thead>
-                    <tr><th>Now</th><th>Player</th><th>Suggested</th><th>Recommendation</th></tr>
+                    <tr><th>#</th><th>Player</th><th>Suggested</th><th>Recommendation</th><th aria-label="drag"></th></tr>
                   </thead>
-                  <tbody>
-                    {#each block.rows as row (row.player)}
+                  <tbody
+                    use:dndzone={{ items, flipDurationMs: 150, dragDisabled: block.locked, dropTargetStyle: {} }}
+                    onconsider={(e) => onOrderConsider(block, e)}
+                    onfinalize={(e) => onOrderFinalize(block, e)}
+                  >
+                    {#each items as row (row.id)}
                       {@const advice = moveAdvice(row)}
-                      <tr>
+                      <tr class:cv-sg-locked-row={block.locked}>
                         <td class="cv-sg-pos">{row.currentPosition}</td>
                         <td>{row.player}</td>
                         <td class="cv-sg-pos">
@@ -469,6 +570,7 @@
                           {#if advice.dir === 'down'}<span class="cv-sg-arrow down">▼</span>{/if}
                         </td>
                         <td class="cv-sg-rec cv-sg-rec-{advice.dir}">{advice.text}</td>
+                        <td class="cv-sg-grip" aria-hidden="true">{block.locked ? '' : '⋮⋮'}</td>
                       </tr>
                     {/each}
                   </tbody>
@@ -479,19 +581,6 @@
         {/each}
       {/if}
     {/if}
-  </section>
-  {/if}
-
-  {#if activeTab === 'show'}
-  <section class="cv-show">
-    <header class="cp-head">
-      <h2>Show Run</h2>
-      <p>Set the conference order, then roll each event live for the broadcast.</p>
-    </header>
-    <div class="cv-show-actions">
-      <a href="/theprogram/show" class="tp-pill tp-pill-navy">Launch Show Run →</a>
-      <a href="/theprogram/show/export" class="tp-pill tp-pill-small">Download Show CSV</a>
-    </div>
 
     <div class="cv-orig">
       <h3>Original Recruit List</h3>
@@ -663,14 +752,7 @@
   .cv-orig-table td { padding: 6px 10px; }
   .cv-orig-table th { padding: 8px 10px; }
 
-  /* Suggested order */
-  .cv-suggest { margin-top: 8px; }
-  .cv-suggest-actions {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin: 18px 0 28px;
-  }
+  /* Show-run order (drag-to-reorder) */
   .cv-sg-conf { margin-bottom: 34px; }
   .cv-sg-conf > h3 {
     font-family: var(--tp-display-condensed);
@@ -678,28 +760,53 @@
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--tp-navy-dark);
-    margin: 0 0 14px;
+    margin: 24px 0 14px;
     padding-bottom: 6px;
     border-bottom: 2px solid var(--tp-navy);
     box-shadow: 0 4px 0 -2px var(--tp-gold);
   }
-  .cv-sg-block { margin-bottom: 18px; }
-  .cv-sg-block > h4 {
+  .cv-sg-block { margin-bottom: 22px; }
+  .cv-sg-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .cv-sg-block-head h4 {
     font-family: var(--tp-display-condensed);
     font-size: 13px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--tp-oxblood);
-    margin: 0 0 6px;
+    margin: 0;
   }
+  .cv-sg-block-actions { display: flex; gap: 8px; }
+  .cv-sg-locked {
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tp-pewter-deep);
+  }
+  .cv-sg-locked-row { opacity: 0.7; }
   .cv-sg-table { table-layout: auto; }
   .cv-sg-table td { padding: 6px 10px; vertical-align: top; }
   .cv-sg-table th { padding: 8px 10px; }
+  .cv-sg-table tbody tr { cursor: grab; }
+  .cv-sg-table tbody tr.cv-sg-locked-row { cursor: default; }
   .cv-sg-pos {
     font-family: var(--tp-display-condensed);
     font-weight: 700;
     width: 36px;
     text-align: center;
+  }
+  .cv-sg-grip {
+    width: 28px;
+    text-align: center;
+    color: var(--tp-pewter-deep);
+    letter-spacing: -2px;
+    user-select: none;
   }
   .cv-sg-arrow { font-size: 10px; margin-left: 4px; }
   .cv-sg-arrow.up { color: var(--tp-gold-2, #b8860b); }

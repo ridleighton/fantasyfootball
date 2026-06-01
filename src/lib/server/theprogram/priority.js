@@ -219,13 +219,15 @@ export async function resetBlockToImport(db, weekId, conference, rollType) {
 
 // ---------------- Lock check ----------------
 
-// A conference is "locked" once any of its events has a non-null outcome.
+// A conference is "locked" once any of its events has been rolled — i.e.
+// has a non-null `result` (the column the roll endpoint writes the winner
+// to; there is no `outcome` column on program_roll_events).
 // Returns a Set of conference names that are locked for the week.
 export async function lockedConferences(db, weekId) {
   const { rows } = await db.query(
     `SELECT DISTINCT conference
        FROM program_roll_events
-      WHERE week_id = $1 AND outcome IS NOT NULL AND outcome <> ''`,
+      WHERE week_id = $1 AND result IS NOT NULL AND result <> ''`,
     [weekId]
   );
   return new Set(rows.map(r => r.conference));

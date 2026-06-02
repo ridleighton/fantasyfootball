@@ -14,8 +14,12 @@
 CREATE TABLE IF NOT EXISTS program_rosters (
   id              serial PRIMARY KEY,
   school_name     text NOT NULL,
-  conference      text NOT NULL,
+  -- looked up from the school (program_schools) on import; null if the
+  -- school isn't in Config yet.
+  conference      text,
   player_name     text NOT NULL,
+  -- position from the imported roster grid (QB/RB/WR/TE/…); optional.
+  position        text,
   -- 'active' | 'inactive'
   status          text NOT NULL DEFAULT 'active'
                     CHECK (status IN ('active', 'inactive')),
@@ -29,8 +33,10 @@ CREATE TABLE IF NOT EXISTS program_rosters (
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- Backfill for an existing table created before week_added was added:
+-- Backfill for an existing table created before these columns were added:
 ALTER TABLE program_rosters ADD COLUMN IF NOT EXISTS week_added integer;
+ALTER TABLE program_rosters ADD COLUMN IF NOT EXISTS position text;
+ALTER TABLE program_rosters ALTER COLUMN conference DROP NOT NULL;
 
 -- A school can't list the same player twice (case-insensitive).
 CREATE UNIQUE INDEX IF NOT EXISTS program_rosters_school_player_uq

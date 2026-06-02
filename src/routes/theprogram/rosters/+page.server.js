@@ -14,7 +14,7 @@ export async function load() {
       db.query(`SELECT name, conference FROM program_schools ORDER BY conference ASC, name ASC`)
         .catch(() => ({ rows: [] })),
       db.query(
-        `SELECT id, school_name, conference, player_name, status, locked,
+        `SELECT id, school_name, conference, player_name, position, status, locked,
                 inactive_reason, week_added
            FROM program_rosters
           ORDER BY school_name ASC, player_name ASC`

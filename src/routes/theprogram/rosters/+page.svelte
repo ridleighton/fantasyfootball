@@ -1,10 +1,44 @@
 <script>
+  import { invalidateAll } from '$app/navigation';
+
   let { data } = $props();
 
   let rosters = $state(structuredClone(data.rosters ?? []));
   let activeConf = $state((data.conferences ?? [])[0] ?? 'C1');
   let drafts = $state({}); // school name -> new player input
   let saveMsg = $state('');
+
+  // ---- Bulk grid import ----
+  let importText = $state('');
+  let importing = $state(false);
+  let showImport = $state(false);
+
+  async function importRoster() {
+    if (!importText.trim()) return;
+    importing = true;
+    saveMsg = '';
+    try {
+      const res = await fetch('/theprogram/rosters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paste: importText })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message ?? `HTTP ${res.status}`);
+      saveMsg = `Imported ${body.imported} player${body.imported === 1 ? '' : 's'}.`
+        + (body.unknownSchools?.length
+          ? ` Not in Config (no conference assigned): ${body.unknownSchools.join(', ')}.`
+          : '');
+      importText = '';
+      showImport = false;
+      await invalidateAll();
+      rosters = structuredClone(data.rosters ?? []);
+    } catch (e) {
+      saveMsg = `Import failed: ${e.message}`;
+    } finally {
+      importing = false;
+    }
+  }
 
   // Schools shown under the active conference: those mapped to it in
   // program_schools, plus any roster school already filed under it.
@@ -68,6 +102,7 @@
       school: entry.school_name,
       conference: entry.conference,
       player: entry.player_name,
+      position: entry.position,
       status: entry.status,
       locked: entry.locked,
       inactive_reason: entry.inactive_reason
@@ -77,6 +112,7 @@
       entry.locked = row.locked;
       entry.inactive_reason = row.inactive_reason;
       entry.week_added = row.week_added;
+      entry.position = row.position;
     }
   }
 
@@ -109,6 +145,30 @@
 
   <div class="rs-rule" aria-hidden="true"></div>
 
+  <div class="rs-import">
+    <button type="button" class="tp-pill tp-pill-small" onclick={() => showImport = !showImport}>
+      {showImport ? 'Hide import' : 'Import roster grid'}
+    </button>
+    {#if showImport}
+      <p class="rs-import-help">
+        Paste a roster grid copied from a spreadsheet — one Player + Pos column pair per school,
+        school names in the top row. Players upsert by school + name; conference is looked up from Config.
+        Total/position-count summary rows are ignored.
+      </p>
+      <textarea
+        class="tp-field rs-import-box"
+        rows="8"
+        bind:value={importText}
+        placeholder={"Texas A&M\t\tOhio State\t\nPlayer\tPos\tPlayer\tPos\nKeisean Henderson\tQB\tJase Mathews\tWR"}
+      ></textarea>
+      <div class="rs-import-actions">
+        <button type="button" class="tp-pill tp-pill-gold" onclick={importRoster} disabled={importing}>
+          {importing ? 'Importing…' : 'Import'}
+        </button>
+      </div>
+    {/if}
+  </div>
+
   <nav class="cv-subtabs" role="tablist" aria-label="Conference">
     {#each data.conferences as conf}
       <button
@@ -135,6 +195,7 @@
           <thead>
             <tr>
               <th>Player</th>
+              <th>Pos</th>
               <th>Status</th>
               <th>Locked</th>
               <th>Reason</th>
@@ -146,6 +207,14 @@
             {#each entries as e (e.id)}
               <tr>
                 <td>{e.player_name}</td>
+                <td>
+                  <input
+                    type="text"
+                    class="rs-pos"
+                    bind:value={e.position}
+                    onblur={() => saveEntry(e)}
+                  />
+                </td>
                 <td>
                   <select bind:value={e.status} onchange={() => saveEntry(e)}>
                     <option value="active">Active</option>
@@ -179,7 +248,7 @@
               </tr>
             {/each}
             {#if entries.length === 0}
-              <tr><td colspan="6" class="rs-none">No players yet.</td></tr>
+              <tr><td colspan="7" class="rs-none">No players yet.</td></tr>
             {/if}
           </tbody>
         </table>
@@ -218,6 +287,12 @@
     margin: 0;
   }
   .rs-rule { height: 2px; background: var(--tp-gold); margin: 14px 0 24px; }
+
+  .rs-import { margin-bottom: 24px; }
+  .rs-import-help { font-size: 12px; color: var(--tp-pewter-deep); margin: 10px 0; max-width: 720px; line-height: 1.5; }
+  .rs-import-box { width: 100%; max-width: 820px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; }
+  .rs-import-actions { margin-top: 10px; }
+  .rs-pos { width: 60px; padding: 4px 6px; border: 1px solid var(--tp-pewter); border-radius: 3px; background: var(--tp-cream); font-family: var(--tp-body); font-size: 13px; color: var(--tp-navy-dark); text-transform: uppercase; }
   .rs-msg { font-size: 13px; font-style: italic; color: var(--tp-gold-2, #b8860b); margin: 0 0 14px; }
   .rs-empty, .rs-none { color: var(--tp-pewter-deep); font-style: italic; }
   .rs-none { text-align: center; padding: 10px; }

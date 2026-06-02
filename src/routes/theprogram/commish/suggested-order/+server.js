@@ -76,7 +76,8 @@ export async function GET() {
             suggestedPosition: s?.suggestedPosition ?? null,
             coachPriority: s?.coachPriority ?? null,
             schoolPriority: s?.schoolPriority ?? null,
-            reason: s?.reason ?? null
+            reason: s?.reason ?? null,
+            coachLists: s?.coachLists ?? []
           };
         });
 

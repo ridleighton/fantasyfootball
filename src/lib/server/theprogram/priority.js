@@ -343,6 +343,14 @@ export async function computePrioritySuggestions(db, weekId) {
         && schools.has(lower(c.school_name))
       );
 
+      // Every school that ranked this recruit (player+conference), even
+      // schools that aren't bidding in this event — surfaced for display
+      // so the commish can see "who has them prioritized where".
+      const coachLists = coachRows
+        .filter(c => lower(c.player_name) === playerLower && lower(c.conference) === confLower)
+        .map(c => ({ school: c.school_name, priority: c.priority }))
+        .sort((a, b) => a.priority - b.priority);
+
       // Level 1: coach priority.
       let coachScoreRaw = null;
       let coachConflict = false;
@@ -461,6 +469,7 @@ export async function computePrioritySuggestions(db, weekId) {
         coachScoreRaw,
         schoolScoreRaw,
         tierRankRaw,
+        coachLists,
         hasCoachSignal,
         hasRanking,
         orderSource,
@@ -505,7 +514,8 @@ export async function computePrioritySuggestions(db, weekId) {
       // Show-order priority inputs, surfaced so the move can be explained
       // ("coach priority #1, school priority #2"). null when not applicable.
       coachPriority: r.coachScoreRaw,
-      schoolPriority: r.schoolScoreRaw
+      schoolPriority: r.schoolScoreRaw,
+      coachLists: r.coachLists
     }));
   }
 

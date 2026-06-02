@@ -679,7 +679,14 @@
                             {#if advice.dir === 'up'}<span class="cv-sg-arrow up">▲</span>{/if}
                             {#if advice.dir === 'down'}<span class="cv-sg-arrow down">▼</span>{/if}
                           </td>
-                          <td class="cv-sg-rec cv-sg-rec-{advice.dir}">{advice.text}</td>
+                          <td class="cv-sg-rec cv-sg-rec-{advice.dir}">
+                            {advice.text}
+                            {#if row.coachLists?.length}
+                              <span class="cv-sg-listed">
+                                Listed by: {#each row.coachLists as cl, i}{i > 0 ? ', ' : ''}{cl.school} #{cl.priority}{/each}
+                              </span>
+                            {/if}
+                          </td>
                         {/if}
                         <td class="cv-sg-grip" aria-hidden="true">{block.locked ? '' : '⋮⋮'}</td>
                       </tr>
@@ -939,6 +946,13 @@
   .cv-sg-rec-down { color: var(--tp-oxblood); font-weight: 600; }
   .cv-sg-rec-hold { font-style: italic; color: var(--tp-pewter-deep); }
   .cv-sg-rec-none { font-style: italic; color: var(--tp-pewter-deep); }
+  .cv-sg-listed {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    font-style: normal;
+    color: var(--tp-pewter-deep);
+  }
 
   /* Spec: table sits directly on the cream page, no wrapper card. */
   .cv-table-wrap {

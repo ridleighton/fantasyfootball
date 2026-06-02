@@ -1,10 +1,18 @@
 <script>
-  import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { dndzone } from 'svelte-dnd-action';
   import { extractColors } from '$lib/client/theprogram/extract-colors.js';
 
-  let { data, form } = $props();
+  let { data } = $props();
+
+  const TABS = [
+    { key: 'conferences', label: 'Conferences' },
+    { key: 'schools', label: 'Schools' },
+    { key: 'photos', label: 'Photo Table' },
+    { key: 'rankings', label: 'Player Rankings' },
+    { key: 'schoolrank', label: 'School Rankings' }
+  ];
+  let activeTab = $state('conferences');
 
   let conferences = $state(structuredClone(data.conferences));
   let schools = $state(structuredClone(data.schools));
@@ -12,9 +20,58 @@
     data.photos.map(p => ({ ...p, _detecting: false, _detectError: '' }))
   ));
 
-  let saving = $state(false);
-  let lastSavedAt = $state(null);
   let tempId = -1;
+
+  // ---- Per-section save (each section saves independently) ----
+  let savingConf = $state(false), confMsg = $state('');
+  let savingSchools = $state(false), schoolMsg = $state('');
+  let savingPhotos = $state(false), photoMsg = $state('');
+
+  async function saveSection(url, payload) {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
+    return body;
+  }
+
+  async function saveConferences() {
+    savingConf = true; confMsg = '';
+    try {
+      await saveSection('/theprogram/config/conferences', { conferences });
+      await invalidateAll();
+      conferences = structuredClone(data.conferences);
+      confMsg = 'Saved.';
+    } catch (e) { confMsg = `Save failed: ${e.message}`; }
+    finally { savingConf = false; }
+  }
+
+  async function saveSchools() {
+    savingSchools = true; schoolMsg = '';
+    try {
+      await saveSection('/theprogram/config/schools', { schools });
+      await invalidateAll();
+      schools = structuredClone(data.schools);
+      schoolMsg = 'Saved.';
+    } catch (e) { schoolMsg = `Save failed: ${e.message}`; }
+    finally { savingSchools = false; }
+  }
+
+  async function savePhotos() {
+    savingPhotos = true; photoMsg = '';
+    try {
+      await saveSection('/theprogram/config/photos', {
+        photos: photos.map(({ _detecting, _detectError, ...rest }) => rest)
+      });
+      await invalidateAll();
+      photos = structuredClone(data.photos.map(p => ({ ...p, _detecting: false, _detectError: '' })));
+      photoMsg = 'Saved.';
+    } catch (e) { photoMsg = `Save failed: ${e.message}`; }
+    finally { savingPhotos = false; }
+  }
 
   // ---- Player Rankings ----
   let playerRankings = $state(structuredClone(data.playerRankings ?? []));
@@ -162,20 +219,6 @@
     }
   }
 
-  const payload = $derived(JSON.stringify({
-    conferences,
-    schools,
-    photos: photos.map(({ _detecting, _detectError, ...rest }) => rest)
-  }));
-
-  function trackSave() {
-    saving = true;
-    return async ({ result, update }) => {
-      await update({ reset: false });
-      saving = false;
-      if (result.type === 'success') lastSavedAt = new Date().toLocaleTimeString();
-    };
-  }
 </script>
 
 <svelte:head><title>Config · The Program</title></svelte:head>
@@ -187,24 +230,25 @@
       <span class="tp-stack-small">The</span>
       <span class="tp-stack-big">Config</span>
     </h1>
-    <p class="cf-sub">
-      Conferences, schools, and photo assets — kept in good order.
-      {#if lastSavedAt}<span class="cf-saved">Saved at {lastSavedAt}</span>{/if}
-    </p>
+    <p class="cf-sub">Conferences, schools, and photo assets — kept in good order.</p>
   </header>
 
   <div class="cv-rule" aria-hidden="true"></div>
 
-  {#if form?.message}
-    <div class="tp-alert tp-alert-error">{form.message}</div>
-  {/if}
-  {#if form?.success}
-    <div class="tp-alert tp-alert-ok">Saved.</div>
-  {/if}
+  <nav class="cf-tabs" role="tablist" aria-label="Config sections">
+    {#each TABS as tab}
+      <button
+        type="button"
+        role="tab"
+        class="cf-tab"
+        class:active={activeTab === tab.key}
+        aria-selected={activeTab === tab.key}
+        onclick={() => activeTab = tab.key}
+      >{tab.label}</button>
+    {/each}
+  </nav>
 
-  <form method="POST" use:enhance={trackSave}>
-    <input type="hidden" name="payload" value={payload} />
-
+  {#if activeTab === 'conferences'}
     <!-- Conferences -->
     <section class="cf-section tp-card">
       <div class="cf-section-head">
@@ -212,7 +256,13 @@
           <span class="cf-section-num">§ I</span>
           <h2>Conferences</h2>
         </div>
-        <button type="button" class="tp-pill tp-pill-small" onclick={addConference}>+ Add</button>
+        <div class="cf-section-actions">
+          <button type="button" class="tp-pill tp-pill-small" onclick={addConference}>+ Add</button>
+          <button type="button" class="tp-pill tp-pill-small tp-pill-navy" onclick={saveConferences} disabled={savingConf}>
+            {savingConf ? 'Saving…' : 'Save'}
+          </button>
+          {#if confMsg}<span class="cf-msg">{confMsg}</span>{/if}
+        </div>
       </div>
       <div class="cf-table-wrap">
         <table class="cf-table">
@@ -229,8 +279,9 @@
       </div>
     </section>
 
-    <div class="tp-divider"><span class="tp-divider-ornament">★</span></div>
+  {/if}
 
+  {#if activeTab === 'schools'}
     <!-- Schools -->
     <section class="cf-section tp-card">
       <div class="cf-section-head">
@@ -240,9 +291,10 @@
         </div>
         <div class="cf-section-actions">
           <button type="button" class="tp-pill tp-pill-small" onclick={addSchool}>+ Add</button>
-          <button type="submit" class="tp-pill tp-pill-small tp-pill-navy" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+          <button type="button" class="tp-pill tp-pill-small tp-pill-navy" onclick={saveSchools} disabled={savingSchools}>
+            {savingSchools ? 'Saving…' : 'Save'}
           </button>
+          {#if schoolMsg}<span class="cf-msg">{schoolMsg}</span>{/if}
         </div>
       </div>
       <div class="cf-table-wrap">
@@ -268,8 +320,9 @@
       </div>
     </section>
 
-    <div class="tp-divider"><span class="tp-divider-ornament">★</span></div>
+  {/if}
 
+  {#if activeTab === 'photos'}
     <!-- Photos -->
     <section class="cf-section tp-card">
       <div class="cf-section-head">
@@ -277,7 +330,13 @@
           <span class="cf-section-num">§ III</span>
           <h2>Photo Table</h2>
         </div>
-        <button type="button" class="tp-pill tp-pill-small" onclick={addPhoto}>+ Add</button>
+        <div class="cf-section-actions">
+          <button type="button" class="tp-pill tp-pill-small" onclick={addPhoto}>+ Add</button>
+          <button type="button" class="tp-pill tp-pill-small tp-pill-navy" onclick={savePhotos} disabled={savingPhotos}>
+            {savingPhotos ? 'Saving…' : 'Save'}
+          </button>
+          {#if photoMsg}<span class="cf-msg">{photoMsg}</span>{/if}
+        </div>
       </div>
       <div class="cf-table-wrap">
         <table class="cf-table cf-photos">
@@ -367,13 +426,9 @@
       </div>
     </section>
 
-    <div class="cf-toolbar">
-      <button type="submit" class="tp-pill tp-pill-navy" disabled={saving}>
-        {saving ? 'Saving…' : 'Save Changes'}
-      </button>
-    </div>
-  </form>
+  {/if}
 
+  {#if activeTab === 'rankings'}
   <!-- Player Rankings — master tier/rank list (not week-scoped) -->
   <section class="pr-section">
     <header class="pr-head">
@@ -412,10 +467,13 @@
     {/if}
   </section>
 
+  {/if}
+
+  {#if activeTab === 'schoolrank'}
   <!-- School Priority — drag list. Position = priority. -->
   <section class="sp-section">
     <header class="sp-head">
-      <h2>School Priority</h2>
+      <h2>School Rankings</h2>
       <p>Drag schools into the order that decides ties when coach lists conflict. Top of the list = priority 1.</p>
     </header>
     <ul
@@ -434,6 +492,7 @@
     </ul>
     {#if spMessage}<span class="sp-msg">{spMessage}</span>{/if}
   </section>
+  {/if}
 </div>
 
 <style>
@@ -456,19 +515,35 @@
     margin: 4px 0 6px;
   }
   .cf-sub { margin: 0; color: var(--tp-muted); font-style: italic; }
-  .cf-saved {
-    margin-left: 10px;
-    font-family: var(--tp-display-condensed);
-    font-style: normal;
-    font-size: 11px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--tp-gold-2);
-  }
   .cv-rule {
     height: 2px;
     background: var(--tp-gold);
-    margin: 14px 0 28px;
+    margin: 14px 0 24px;
+  }
+
+  .cf-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .cf-tab {
+    padding: 9px 16px;
+    background: var(--tp-cream);
+    border: 1px solid var(--tp-navy);
+    border-radius: 999px;
+    color: var(--tp-navy);
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .cf-tab:hover { background: rgba(217, 164, 65, 0.18); }
+  .cf-tab.active { background: var(--tp-navy); color: var(--tp-cream); border-color: var(--tp-gold); }
+
+  .cf-msg {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--tp-cream);
+    opacity: 0.9;
   }
 
   .cf-section { overflow: hidden; margin-bottom: 0; }
@@ -622,14 +697,8 @@
     background: rgba(122, 31, 43, 0.1);
     border-color: var(--tp-oxblood);
   }
-  .cf-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 28px;
-  }
-
   /* ---- Player Rankings + School Priority ---- */
-  .pr-section, .sp-section { margin-top: 48px; }
+  .pr-section, .sp-section { margin-top: 8px; }
   .pr-head h2, .sp-head h2 {
     font-family: var(--tp-display-condensed);
     font-size: 22px;

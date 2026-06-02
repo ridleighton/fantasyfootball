@@ -7,6 +7,7 @@
   let activeConf = $state((data.conferences ?? [])[0] ?? 'C1');
   let drafts = $state({}); // school name -> new player input
   let saveMsg = $state('');
+  let inactiveOpen = $state({}); // school name -> inactive section expanded?
 
   // ---- Bulk grid import ----
   let importText = $state('');
@@ -235,25 +236,35 @@
 
         {#if groups.inactive.length > 0}
           <div class="rs-inactive">
-            <h3 class="rs-inactive-head">Inactive · {groups.inactive.length}</h3>
-            <table class="rs-table">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Pos</th>
-                  <th>Status</th>
-                  <th>Locked</th>
-                  <th>Reason</th>
-                  <th>Week added</th>
-                  <th aria-label="actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each groups.inactive as e (e.id)}
-                  {@render rosterRow(e)}
-                {/each}
-              </tbody>
-            </table>
+            <button
+              type="button"
+              class="rs-inactive-toggle"
+              aria-expanded={!!inactiveOpen[school]}
+              onclick={() => inactiveOpen[school] = !inactiveOpen[school]}
+            >
+              <span class="rs-caret" class:open={inactiveOpen[school]}>▸</span>
+              Inactive · {groups.inactive.length}
+            </button>
+            {#if inactiveOpen[school]}
+              <table class="rs-table rs-inactive-table">
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Pos</th>
+                    <th>Status</th>
+                    <th>Locked</th>
+                    <th>Reason</th>
+                    <th>Week added</th>
+                    <th aria-label="actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each groups.inactive as e (e.id)}
+                    {@render rosterRow(e)}
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
           </div>
         {/if}
       </section>
@@ -401,21 +412,30 @@
   .rs-add { display: flex; gap: 8px; margin-top: 10px; max-width: 420px; }
   .rs-add .tp-field { flex: 1; }
 
-  /* Inactive players — greyed section at the bottom of each school. */
+  /* Inactive players — collapsible, greyed section at the bottom. */
   .rs-inactive {
     margin-top: 18px;
     padding-top: 6px;
     border-top: 1px dashed var(--tp-pewter);
-    opacity: 0.55;
-    filter: grayscale(0.6);
   }
-  .rs-inactive:hover { opacity: 0.85; }
-  .rs-inactive-head {
+  .rs-inactive-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    padding: 4px 0;
+    cursor: pointer;
     font-family: var(--tp-display-condensed);
     font-size: 12px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--tp-pewter-deep);
-    margin: 6px 0 4px;
   }
+  .rs-inactive-toggle:hover { color: var(--tp-navy-dark); }
+  .rs-caret { display: inline-block; transition: transform 0.15s; font-size: 10px; }
+  .rs-caret.open { transform: rotate(90deg); }
+  /* Only the table content is greyed — the count stays readable. */
+  .rs-inactive-table { margin-top: 6px; opacity: 0.55; filter: grayscale(0.6); }
+  .rs-inactive-table:hover { opacity: 0.85; }
 </style>

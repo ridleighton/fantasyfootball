@@ -512,6 +512,76 @@ export async function computePrioritySuggestions(db, weekId) {
   return out;
 }
 
+// Diagnose why coach lists may not be matching recruits. Matching needs
+// player + conference + school to all line up; this reports a funnel so we
+// can see which condition fails, plus a few unmatched samples with the
+// closest event values to eyeball the discrepancy.
+export async function diagnoseCoachMatching(db, weekId) {
+  const [eventsRes, coachRes] = await Promise.all([
+    db.query(
+      `SELECT id, conference, type, player, school, committed_school, odds
+         FROM program_roll_events WHERE week_id = $1 ORDER BY id`,
+      [weekId]
+    ),
+    db.query(
+      `SELECT school_name, player_name, conference
+         FROM program_coach_priority_lists WHERE week_id = $1`,
+      [weekId]
+    )
+  ]);
+
+  const blocks = groupRowsForOrder(eventsRes.rows);
+  const evPlayers = new Set();
+  const evPlayerConf = new Set();
+  const evFull = new Set();
+  // Per-player: what conferences/schools the events actually use, for samples.
+  const confByPlayer = new Map();
+  const schoolsByPlayerConf = new Map();
+  for (const players of blocks.values()) {
+    for (const g of players.values()) {
+      const pl = lower(g.player);
+      const cf = lower(g.conference);
+      evPlayers.add(pl);
+      evPlayerConf.add(`${pl}|${cf}`);
+      if (!confByPlayer.has(pl)) confByPlayer.set(pl, new Set());
+      confByPlayer.get(pl).add(g.conference);
+      const schs = schoolsInEvent(g);
+      schoolsByPlayerConf.set(`${pl}|${cf}`, [...schs]);
+      for (const sch of schs) evFull.add(`${pl}|${cf}|${sch}`);
+    }
+  }
+
+  let matchPlayer = 0, matchPlayerConf = 0, matchFull = 0;
+  const samples = [];
+  for (const c of coachRes.rows) {
+    const pl = lower(c.player_name), cf = lower(c.conference), sc = lower(c.school_name);
+    const p = evPlayers.has(pl);
+    const pc = evPlayerConf.has(`${pl}|${cf}`);
+    const full = evFull.has(`${pl}|${cf}|${sc}`);
+    if (p) matchPlayer++;
+    if (pc) matchPlayerConf++;
+    if (full) matchFull++;
+    if (!full && samples.length < 6) {
+      samples.push({
+        list: { player: c.player_name, conference: c.conference, school: c.school_name },
+        playerFound: p,
+        confMatches: pc,
+        schoolMatches: full,
+        eventConferences: p ? [...(confByPlayer.get(pl) ?? [])] : [],
+        eventSchools: pc ? (schoolsByPlayerConf.get(`${pl}|${cf}`) ?? []) : []
+      });
+    }
+  }
+
+  return {
+    coachTotal: coachRes.rows.length,
+    matchPlayer,        // coach rows whose player appears in any event
+    matchPlayerConf,    // ...and whose conference also matches
+    matchFull,          // ...and whose school also matches (full match)
+    samples
+  };
+}
+
 function bounds(list, accessor) {
   let min = Infinity, max = -Infinity, any = false;
   for (const r of list) {

@@ -589,17 +589,43 @@
     </div>
 
     {#if orderMeta}
-      <p class="cv-diag">
-        Inputs: <strong>{orderMeta.coachEntries}</strong> coach entries ·
-        <strong>{orderMeta.rankedPlayers}</strong> ranked players.
-        Commit recruits resolved by — coach: {orderMeta.sourceCounts.coach},
-        slots: {orderMeta.sourceCounts.slots},
-        school: {orderMeta.sourceCounts.school},
-        ranking/import: {orderMeta.sourceCounts.tier_rank}.
-        {#if orderMeta.coachEntries > 0 && orderMeta.sourceCounts.coach === 0 && orderMeta.sourceCounts.slots === 0 && orderMeta.sourceCounts.school === 0}
-          <span class="cv-diag-warn">Coach lists exist but none matched a recruit — check that school names on the lists match the odds-string school names.</span>
+      <div class="cv-diag">
+        <p>
+          Inputs: <strong>{orderMeta.coachEntries}</strong> coach entries ·
+          <strong>{orderMeta.rankedPlayers}</strong> ranked players.
+          Commit recruits resolved by — coach: {orderMeta.sourceCounts.coach},
+          slots: {orderMeta.sourceCounts.slots},
+          school: {orderMeta.sourceCounts.school},
+          ranking/import: {orderMeta.sourceCounts.tier_rank}.
+        </p>
+        {#if orderMeta.match && orderMeta.match.coachTotal > 0}
+          <p>
+            Coach-list match funnel:
+            <strong>{orderMeta.match.matchPlayer}</strong>/{orderMeta.match.coachTotal} player names found,
+            <strong>{orderMeta.match.matchPlayerConf}</strong> also match conference,
+            <strong>{orderMeta.match.matchFull}</strong> also match school (full match).
+          </p>
+          {#if orderMeta.match.matchFull === 0 && orderMeta.match.samples?.length}
+            <div class="cv-diag-warn">
+              No full matches. The break is at the first step below where the count drops. Sample unmatched entries:
+              <ul>
+                {#each orderMeta.match.samples as s}
+                  <li>
+                    <strong>{s.list.player}</strong> / {s.list.conference} / {s.list.school} —
+                    {#if !s.playerFound}
+                      player name not found in any event
+                    {:else if !s.confMatches}
+                      conference mismatch (events use: {s.eventConferences.join(', ') || '—'})
+                    {:else if !s.schoolMatches}
+                      school mismatch (event schools: {s.eventSchools.join(', ') || '—'})
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
         {/if}
-      </p>
+      </div>
     {/if}
 
     {#if orderLoadError}
@@ -843,8 +869,11 @@
     margin: 14px 0 0;
     line-height: 1.5;
   }
+  .cv-diag p { margin: 0 0 6px; }
   .cv-diag strong { color: var(--tp-navy-dark); }
-  .cv-diag-warn { display: block; margin-top: 4px; color: var(--tp-oxblood); font-style: italic; }
+  .cv-diag-warn { margin-top: 4px; color: var(--tp-oxblood); }
+  .cv-diag-warn ul { margin: 4px 0 0; padding-left: 18px; }
+  .cv-diag-warn li { margin-bottom: 2px; }
 
   /* Show-run order (drag-to-reorder) */
   .cv-sg-conf { margin-bottom: 34px; }

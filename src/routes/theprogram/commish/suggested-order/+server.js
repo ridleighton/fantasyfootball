@@ -4,7 +4,8 @@ import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
 import {
   computePrioritySuggestions,
   getShowOrder,
-  lockedConferences
+  lockedConferences,
+  diagnoseCoachMatching
 } from '$lib/server/theprogram/priority.js';
 
 // Returns each (conference, roll type) block in its current show-run order,
@@ -17,12 +18,13 @@ export async function GET() {
   const { weekId } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [currentOrder, suggestions, locked, coachCntRes, rankCntRes] = await Promise.all([
+    const [currentOrder, suggestions, locked, coachCntRes, rankCntRes, matchDiag] = await Promise.all([
       getShowOrder(db, weekId),
       computePrioritySuggestions(db, weekId),
       lockedConferences(db, weekId),
       db.query(`SELECT count(*)::int AS n FROM program_coach_priority_lists WHERE week_id = $1`, [weekId]).catch(() => ({ rows: [{ n: 0 }] })),
-      db.query(`SELECT count(*)::int AS n FROM program_player_rankings`).catch(() => ({ rows: [{ n: 0 }] }))
+      db.query(`SELECT count(*)::int AS n FROM program_player_rankings`).catch(() => ({ rows: [{ n: 0 }] })),
+      diagnoseCoachMatching(db, weekId).catch(() => null)
     ]);
 
     const confs = new Set([...Object.keys(currentOrder), ...Object.keys(suggestions)]);
@@ -40,7 +42,8 @@ export async function GET() {
     const meta = {
       coachEntries: coachCntRes.rows[0]?.n ?? 0,
       rankedPlayers: rankCntRes.rows[0]?.n ?? 0,
-      sourceCounts
+      sourceCounts,
+      match: matchDiag
     };
 
     for (const conf of [...confs].sort((a, b) => a.localeCompare(b))) {

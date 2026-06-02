@@ -17,14 +17,31 @@ export async function GET() {
   const { weekId } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [currentOrder, suggestions, locked] = await Promise.all([
+    const [currentOrder, suggestions, locked, coachCntRes, rankCntRes] = await Promise.all([
       getShowOrder(db, weekId),
       computePrioritySuggestions(db, weekId),
-      lockedConferences(db, weekId)
+      lockedConferences(db, weekId),
+      db.query(`SELECT count(*)::int AS n FROM program_coach_priority_lists WHERE week_id = $1`, [weekId]).catch(() => ({ rows: [{ n: 0 }] })),
+      db.query(`SELECT count(*)::int AS n FROM program_player_rankings`).catch(() => ({ rows: [{ n: 0 }] }))
     ]);
 
     const confs = new Set([...Object.keys(currentOrder), ...Object.keys(suggestions)]);
     const blocks = [];
+
+    // Diagnostics: how many commit recruits drew on each signal. If coach
+    // lists exist but every recruit resolves to tier_rank, the lists aren't
+    // matching the events (school-name mismatch).
+    const sourceCounts = { coach: 0, slots: 0, school: 0, tier_rank: 0 };
+    for (const conf of Object.keys(suggestions)) {
+      for (const s of suggestions[conf]?.commit ?? []) {
+        sourceCounts[s.orderSource] = (sourceCounts[s.orderSource] ?? 0) + 1;
+      }
+    }
+    const meta = {
+      coachEntries: coachCntRes.rows[0]?.n ?? 0,
+      rankedPlayers: rankCntRes.rows[0]?.n ?? 0,
+      sourceCounts
+    };
 
     for (const conf of [...confs].sort((a, b) => a.localeCompare(b))) {
       const rollTypes = new Set([
@@ -66,7 +83,7 @@ export async function GET() {
       }
     }
 
-    return json({ blocks });
+    return json({ blocks, meta });
   } catch (e) {
     throw error(500, `Failed to compute suggested order: ${e.message}`);
   } finally {

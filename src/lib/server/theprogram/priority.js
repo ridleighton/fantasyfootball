@@ -34,22 +34,25 @@ function schoolsInEvent(group) {
   const out = new Set();
   const rollType = normalizeRollType(group.type);
 
+  // Names are stored lowercased so coach-list matching is case- and
+  // whitespace-insensitive (a coach's "Texas" must match an odds-string
+  // "texas " etc., or the coach signal is silently lost).
   for (const r of group.rows ?? []) {
     if (rollType === 'steal') {
-      const s = (r.school ?? '').trim();
+      const s = lower(r.school);
       if (s) out.add(s);
-      const c = (r.committed_school ?? '').trim();
+      const c = lower(r.committed_school);
       if (c) out.add(c);
     } else {
       // commit or auto-commit — odds string holds the pairs
       const pairs = parseOddsPairs(r.odds);
       for (const p of pairs) {
-        const sch = (p.school ?? '').trim();
+        const sch = lower(p.school);
         if (sch) out.add(sch);
       }
       // also include row.school if set (auto-commit bidders sometimes
       // land in the school column without being in the odds string)
-      const direct = (r.school ?? '').trim();
+      const direct = lower(r.school);
       if (direct) out.add(direct);
     }
   }
@@ -337,7 +340,7 @@ export async function computePrioritySuggestions(db, weekId) {
       const subs = coachRows.filter(c =>
         lower(c.player_name) === playerLower
         && lower(c.conference) === confLower
-        && schools.has((c.school_name ?? '').trim())
+        && schools.has(lower(c.school_name))
       );
 
       // Level 1: coach priority.

@@ -25,6 +25,7 @@
   // orderBlocks holds the live, drag-reorderable state once loaded:
   //   [{ conference, rollType, locked, rows: [{ id, player, suggestedPosition, ... }] }]
   let orderBlocks = $state(null);
+  let orderMeta = $state(null);
   let orderLoading = $state(false);
   let orderLoadError = $state('');
   let orderSaveMsg = $state('');
@@ -49,6 +50,7 @@
         ...b,
         rows: b.rows.map(row => ({ ...row, id: `${b.conference}|${b.rollType}|${row.player}` }))
       }));
+      orderMeta = body.meta ?? null;
     } catch (e) {
       orderLoadError = `Could not load order: ${e.message}`;
     } finally {
@@ -586,6 +588,20 @@
       {#if orderSaveMsg}<span class="cv-saved">{orderSaveMsg}</span>{/if}
     </div>
 
+    {#if orderMeta}
+      <p class="cv-diag">
+        Inputs: <strong>{orderMeta.coachEntries}</strong> coach entries ·
+        <strong>{orderMeta.rankedPlayers}</strong> ranked players.
+        Commit recruits resolved by — coach: {orderMeta.sourceCounts.coach},
+        slots: {orderMeta.sourceCounts.slots},
+        school: {orderMeta.sourceCounts.school},
+        ranking/import: {orderMeta.sourceCounts.tier_rank}.
+        {#if orderMeta.coachEntries > 0 && orderMeta.sourceCounts.coach === 0 && orderMeta.sourceCounts.slots === 0 && orderMeta.sourceCounts.school === 0}
+          <span class="cv-diag-warn">Coach lists exist but none matched a recruit — check that school names on the lists match the odds-string school names.</span>
+        {/if}
+      </p>
+    {/if}
+
     {#if orderLoadError}
       <div class="tp-alert tp-alert-error">{orderLoadError}</div>
     {/if}
@@ -820,6 +836,15 @@
   }
   .cv-orig-table td { padding: 6px 10px; }
   .cv-orig-table th { padding: 8px 10px; }
+
+  .cv-diag {
+    font-size: 12px;
+    color: var(--tp-pewter-deep);
+    margin: 14px 0 0;
+    line-height: 1.5;
+  }
+  .cv-diag strong { color: var(--tp-navy-dark); }
+  .cv-diag-warn { display: block; margin-top: 4px; color: var(--tp-oxblood); font-style: italic; }
 
   /* Show-run order (drag-to-reorder) */
   .cv-sg-conf { margin-bottom: 34px; }

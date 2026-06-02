@@ -238,7 +238,12 @@
           <span class="cf-section-num">§ II</span>
           <h2>Schools</h2>
         </div>
-        <button type="button" class="tp-pill tp-pill-small" onclick={addSchool}>+ Add</button>
+        <div class="cf-section-actions">
+          <button type="button" class="tp-pill tp-pill-small" onclick={addSchool}>+ Add</button>
+          <button type="submit" class="tp-pill tp-pill-small tp-pill-navy" disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
       </div>
       <div class="cf-table-wrap">
         <table class="cf-table">
@@ -477,6 +482,7 @@
     color: var(--tp-cream);
   }
   .cf-section-title { display: flex; align-items: baseline; gap: 12px; }
+  .cf-section-actions { display: flex; align-items: center; gap: 8px; }
   .cf-section-num {
     font-family: var(--tp-display-condensed);
     font-weight: 600;

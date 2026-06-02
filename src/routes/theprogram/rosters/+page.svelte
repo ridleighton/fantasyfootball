@@ -67,6 +67,16 @@
       .sort((a, b) => a.player_name.localeCompare(b.player_name));
   }
 
+  // Active players go in the main table; inactive players drop to a greyed
+  // section at the bottom of each school.
+  function splitFor(school) {
+    const all = rostersFor(school);
+    return {
+      active: all.filter(e => e.status !== 'inactive'),
+      inactive: all.filter(e => e.status === 'inactive')
+    };
+  }
+
   async function postEntry(payload) {
     saveMsg = 'Saving…';
     try {
@@ -188,7 +198,7 @@
     <p class="rs-empty">No schools in {activeConf}. Add schools under Config first.</p>
   {:else}
     {#each confSchools() as school (school)}
-      {@const entries = rostersFor(school)}
+      {@const groups = splitFor(school)}
       <section class="rs-school">
         <header class="rs-school-head"><h2>{school}</h2></header>
         <table class="rs-table">
@@ -204,51 +214,11 @@
             </tr>
           </thead>
           <tbody>
-            {#each entries as e (e.id)}
-              <tr>
-                <td>{e.player_name}</td>
-                <td>
-                  <input
-                    type="text"
-                    class="rs-pos"
-                    bind:value={e.position}
-                    onblur={() => saveEntry(e)}
-                  />
-                </td>
-                <td>
-                  <select bind:value={e.status} onchange={() => saveEntry(e)}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </td>
-                <td>
-                  {#if e.status === 'active'}
-                    <input type="checkbox" bind:checked={e.locked} onchange={() => saveEntry(e)} />
-                  {:else}
-                    <span class="rs-na">—</span>
-                  {/if}
-                </td>
-                <td>
-                  {#if e.status === 'inactive'}
-                    <input
-                      type="text"
-                      class="rs-reason"
-                      placeholder="Reason"
-                      bind:value={e.inactive_reason}
-                      onblur={() => saveEntry(e)}
-                    />
-                  {:else}
-                    <span class="rs-na">—</span>
-                  {/if}
-                </td>
-                <td class="rs-wk">{e.week_added != null ? `Wk ${e.week_added}` : '—'}</td>
-                <td>
-                  <button type="button" class="rs-del" onclick={() => removeEntry(e)} aria-label="Remove">×</button>
-                </td>
-              </tr>
+            {#each groups.active as e (e.id)}
+              {@render rosterRow(e)}
             {/each}
-            {#if entries.length === 0}
-              <tr><td colspan="7" class="rs-none">No players yet.</td></tr>
+            {#if groups.active.length === 0}
+              <tr><td colspan="7" class="rs-none">No active players.</td></tr>
             {/if}
           </tbody>
         </table>
@@ -262,10 +232,73 @@
           />
           <button type="button" class="tp-pill tp-pill-small tp-pill-gold" onclick={() => addPlayer(school)}>+ Add</button>
         </div>
+
+        {#if groups.inactive.length > 0}
+          <div class="rs-inactive">
+            <h3 class="rs-inactive-head">Inactive · {groups.inactive.length}</h3>
+            <table class="rs-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Pos</th>
+                  <th>Status</th>
+                  <th>Locked</th>
+                  <th>Reason</th>
+                  <th>Week added</th>
+                  <th aria-label="actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each groups.inactive as e (e.id)}
+                  {@render rosterRow(e)}
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
       </section>
     {/each}
   {/if}
 </div>
+
+{#snippet rosterRow(e)}
+  <tr>
+    <td>{e.player_name}</td>
+    <td>
+      <input type="text" class="rs-pos" bind:value={e.position} onblur={() => saveEntry(e)} />
+    </td>
+    <td>
+      <select bind:value={e.status} onchange={() => saveEntry(e)}>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </td>
+    <td>
+      {#if e.status === 'active'}
+        <input type="checkbox" bind:checked={e.locked} onchange={() => saveEntry(e)} />
+      {:else}
+        <span class="rs-na">—</span>
+      {/if}
+    </td>
+    <td>
+      {#if e.status === 'inactive'}
+        <input
+          type="text"
+          class="rs-reason"
+          placeholder="Reason"
+          bind:value={e.inactive_reason}
+          onblur={() => saveEntry(e)}
+        />
+      {:else}
+        <span class="rs-na">—</span>
+      {/if}
+    </td>
+    <td class="rs-wk">{e.week_added != null ? `Wk ${e.week_added}` : '—'}</td>
+    <td>
+      <button type="button" class="rs-del" onclick={() => removeEntry(e)} aria-label="Remove">×</button>
+    </td>
+  </tr>
+{/snippet}
 
 <style>
   .rs { max-width: 1100px; margin: 0 auto; padding: 36px 28px 60px; }
@@ -367,4 +400,22 @@
   .rs-del:hover { background: rgba(122, 31, 43, 0.1); border-color: var(--tp-oxblood); }
   .rs-add { display: flex; gap: 8px; margin-top: 10px; max-width: 420px; }
   .rs-add .tp-field { flex: 1; }
+
+  /* Inactive players — greyed section at the bottom of each school. */
+  .rs-inactive {
+    margin-top: 18px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--tp-pewter);
+    opacity: 0.55;
+    filter: grayscale(0.6);
+  }
+  .rs-inactive:hover { opacity: 0.85; }
+  .rs-inactive-head {
+    font-family: var(--tp-display-condensed);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tp-pewter-deep);
+    margin: 6px 0 4px;
+  }
 </style>

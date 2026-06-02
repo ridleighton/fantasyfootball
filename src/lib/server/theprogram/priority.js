@@ -552,7 +552,11 @@ export async function diagnoseCoachMatching(db, weekId) {
   }
 
   let matchPlayer = 0, matchPlayerConf = 0, matchFull = 0;
-  const samples = [];
+  // Bucket unmatched entries by how far they got, so we can surface the
+  // most informative ones first: player+conference matched but school
+  // didn't (these *should* match — reveals the school-name discrepancy),
+  // then conference failures, then player-not-found.
+  const schoolFails = [], confFails = [], playerFails = [];
   for (const c of coachRes.rows) {
     const pl = lower(c.player_name), cf = lower(c.conference), sc = lower(c.school_name);
     const p = evPlayers.has(pl);
@@ -560,17 +564,18 @@ export async function diagnoseCoachMatching(db, weekId) {
     const full = evFull.has(`${pl}|${cf}|${sc}`);
     if (p) matchPlayer++;
     if (pc) matchPlayerConf++;
-    if (full) matchFull++;
-    if (!full && samples.length < 6) {
-      samples.push({
-        list: { player: c.player_name, conference: c.conference, school: c.school_name },
-        playerFound: p,
-        confMatches: pc,
-        schoolMatches: full,
-        eventConferences: p ? [...(confByPlayer.get(pl) ?? [])] : [],
-        eventSchools: pc ? (schoolsByPlayerConf.get(`${pl}|${cf}`) ?? []) : []
-      });
-    }
+    if (full) { matchFull++; continue; }
+    const entry = {
+      list: { player: c.player_name, conference: c.conference, school: c.school_name },
+      playerFound: p,
+      confMatches: pc,
+      schoolMatches: full,
+      eventConferences: p ? [...(confByPlayer.get(pl) ?? [])] : [],
+      eventSchools: pc ? (schoolsByPlayerConf.get(`${pl}|${cf}`) ?? []) : []
+    };
+    if (pc) schoolFails.push(entry);
+    else if (p) confFails.push(entry);
+    else playerFails.push(entry);
   }
 
   return {
@@ -578,7 +583,7 @@ export async function diagnoseCoachMatching(db, weekId) {
     matchPlayer,        // coach rows whose player appears in any event
     matchPlayerConf,    // ...and whose conference also matches
     matchFull,          // ...and whose school also matches (full match)
-    samples
+    samples: [...schoolFails, ...confFails, ...playerFails].slice(0, 8)
   };
 }
 

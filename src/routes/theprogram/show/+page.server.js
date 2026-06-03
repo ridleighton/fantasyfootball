@@ -16,6 +16,7 @@ import {
   lockedConferences,
   computePrioritySuggestions
 } from '$lib/server/theprogram/priority.js';
+import { getRosterCounts, ACTIVE_LIMIT } from '$lib/server/theprogram/roster.js';
 
 const CONFERENCES = ['C1', 'C2', 'C3', 'C4', 'C5'];
 
@@ -90,18 +91,33 @@ async function loadFromDb() {
       };
     }
 
+    // Active-roster counts drive capacity (15-player limit). Key by
+    // lowercased school name for case-insensitive lookups.
+    const rcRaw = await getRosterCounts(db).catch(() => new Map());
+    const rosterCounts = new Map([...rcRaw].map(([k, v]) => [k.toLowerCase(), v]));
+
     const allSchools = new Set();
     const decorated = events.map((ev, i) => {
       let display, kind;
-      if (ev.type === 'Commit') { display = computeCommit(ev); kind = 'commit'; }
-      else if (ev.type === 'Steal') { display = computeSteal(ev); kind = 'steal'; }
-      else if (ev.type === 'Auto-Commit') { display = computeAutoCommit(ev); kind = 'auto'; }
+      if (ev.type === 'Commit') { display = computeCommit(ev, rosterCounts); kind = 'commit'; }
+      else if (ev.type === 'Steal') { display = computeSteal(ev, rosterCounts); kind = 'steal'; }
+      else if (ev.type === 'Auto-Commit') { display = computeAutoCommit(ev, rosterCounts); kind = 'auto'; }
       else { display = { schools: [] }; kind = 'unknown'; }
 
       for (const s of display.schools ?? []) allSchools.add(s.school);
       if (display.committedSchool) allSchools.add(display.committedSchool);
 
       const savedResult = ev.rows.find(r => r.result)?.result ?? null;
+
+      // Roll can't run because every eligible school is at capacity.
+      let capacityBlocked = false;
+      if (kind === 'commit') {
+        const sc = display.schools ?? [];
+        capacityBlocked = sc.length > 0 && sc.every(s => !s.eligible) && sc.some(s => s.at_capacity);
+      } else if (kind === 'auto') {
+        capacityBlocked = (display.autoCommitSchools?.length > 0)
+          && (display.eligibleAutoCommitSchools?.length === 0);
+      }
 
       return {
         globalIndex: i,
@@ -111,6 +127,7 @@ async function loadFromDb() {
         kind,
         display,
         savedResult,
+        capacityBlocked,
         rowIds: ev.rows.map(r => r.id)
       };
     });
@@ -120,7 +137,8 @@ async function loadFromDb() {
       ev.display.schools = (ev.display.schools ?? []).map(s => ({
         ...s,
         helmet: helmetForSchool(photos, s.school),
-        colors: colorsForSchool(photos, s.school)
+        colors: colorsForSchool(photos, s.school),
+        rosterActive: rosterCounts.get(s.school.toLowerCase()) ?? 0
       }));
       if (ev.display.committedSchool) {
         ev.display.committedSchoolHelmet = helmetForSchool(photos, ev.display.committedSchool);
@@ -183,7 +201,9 @@ async function loadFromDb() {
       barsImage: photos.bars,
       showOrder,
       prioritySuggestions,
-      lockedConferences: [...lockedConfs]
+      lockedConferences: [...lockedConfs],
+      rosterCounts: Object.fromEntries(rosterCounts),
+      activeLimit: ACTIVE_LIMIT
     };
   } finally {
     await db.end();

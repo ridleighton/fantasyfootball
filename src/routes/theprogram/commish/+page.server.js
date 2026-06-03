@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { createClient } from '$lib/server/db.js';
 import { requireActiveWeek } from '$lib/server/theprogram/active-week.js';
+import { getRosterCounts, ACTIVE_LIMIT } from '$lib/server/theprogram/roster.js';
 
 const TYPES = ['Auto-Commit', 'Steal', 'Commit'];
 
@@ -68,6 +69,12 @@ export async function load() {
         ORDER BY school ASC
       `).catch(() => ({ rows: [] }))
     ]);
+
+    // Active-roster counts for the read-only Capacity column (lowercased keys).
+    const rcRaw = await getRosterCounts(db).catch(() => new Map());
+    const rosterCounts = {};
+    for (const [k, v] of rcRaw) rosterCounts[k.toLowerCase()] = v;
+
     return {
       weekId,
       weekNumber,
@@ -77,7 +84,9 @@ export async function load() {
       coachPriorities: coachRes.rows,
       schools: schoolsRes.rows.map(r => r.name),
       schoolPriority: schoolPriRes.rows,
-      schoolsForPriority: allSchoolsRes.rows.map(r => r.name)
+      schoolsForPriority: allSchoolsRes.rows.map(r => r.name),
+      rosterCounts,
+      activeLimit: ACTIVE_LIMIT
     };
   } finally {
     await db.end();

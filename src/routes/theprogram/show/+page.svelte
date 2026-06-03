@@ -168,6 +168,11 @@
   let rollWinner = $state(null);
   let rollOutcome = $state(null);
   let rollError = $state('');
+  // Capacity (15-player limit): post-roll active count for the winner card,
+  // and the conflict modal when a winning school hit 15 before the insert.
+  let rollRosterCount = $state(null);
+  let capacityConflict = $state(null); // school name when a roll was rejected at capacity
+  const ACTIVE_LIMIT = data.activeLimit ?? 15;
   // Colors for the spinner glow on the slow phase + confetti burst. Defaults
   // to the brand tokens if the winning school has no extracted colors yet.
   let glowPrimary = $state('#D9A441');
@@ -296,6 +301,8 @@
     rollWinner = null;
     rollOutcome = null;
     rollError = '';
+    rollRosterCount = null;
+    capacityConflict = null;
     upsetPhase = 'off';
     darkenOpacity = 0;
     acPhase = 'off';
@@ -402,6 +409,15 @@
       rollState = 'idle';
       return;
     }
+
+    // A winning school hit the 15-player cap before the roster insert: the
+    // roll was rolled back and the event stays unrolled.
+    if (serverResult.capacity_conflict) {
+      capacityConflict = serverResult.school;
+      rollState = 'idle';
+      return;
+    }
+    rollRosterCount = serverResult.roster_active_count ?? null;
 
     if (skipSpinner) {
       rollWinner = serverResult.winner;
@@ -587,6 +603,13 @@
         acPhase = 'off';
         return;
       }
+      if (serverResult.capacity_conflict) {
+        capacityConflict = serverResult.school;
+        acPhase = 'off';
+        rollState = 'idle';
+        return;
+      }
+      rollRosterCount = serverResult.roster_active_count ?? null;
       rollWinner = serverResult.winner;
       rollOutcome = serverResult.outcome;
       acPhase = 'solo_done';
@@ -623,6 +646,14 @@
       rollState = 'idle';
       return;
     }
+
+    if (serverResult.capacity_conflict) {
+      capacityConflict = serverResult.school;
+      acPhase = 'phase2_ready';
+      rollState = 'idle';
+      return;
+    }
+    rollRosterCount = serverResult.roster_active_count ?? null;
 
     await wait(3200 + Math.random() * 1200);
     rollWinner = serverResult.winner;
@@ -1159,7 +1190,9 @@
           {:else}
             <div class="helmet helmet-placeholder" aria-hidden="true">{s.school[0] ?? '?'}</div>
           {/if}
-          {#if s.eligible === false}
+          {#if s.at_capacity}
+            <div class="full-badge" aria-label="at capacity">FULL<small>{s.rosterActive ?? ACTIVE_LIMIT}/{ACTIVE_LIMIT}</small></div>
+          {:else if s.eligible === false}
             <div class="x-badge" aria-label="ineligible">×</div>
           {/if}
           {#if showBars}
@@ -1176,7 +1209,9 @@
         </div>
         <div class="school-name">{s.school}</div>
         <div class="school-pct">
-          {#if s.eligible === false}
+          {#if s.at_capacity}
+            <span class="pct-bad">FULL · {s.rosterActive ?? ACTIVE_LIMIT}/{ACTIVE_LIMIT}</span>
+          {:else if s.eligible === false}
             <span class="pct-bad">{(s.raw ?? 0).toFixed(1)}% · below cut</span>
           {:else if dropping}
             <span
@@ -1378,18 +1413,38 @@
           <button class="tp-pill tp-pill-gold" onclick={goToNextRecruit}>Next Recruit →</button>
         </div>
       {:else if rollState === 'idle' && acPhase === 'off'}
-        {#if !isSolo(currentEvent)}
+        {#if currentEvent.capacityBlocked}
+          <div class="capacity-banner">
+            No eligible schools — all schools in this roll are at capacity. Adjust rosters before running this event.
+          </div>
+        {:else if !isSolo(currentEvent)}
           <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>
             {currentEvent.kind === 'auto' ? 'Reveal Auto-Commits' : 'Roll'}
           </button>
         {/if}
       {:else if rollState === 'revealed'}
+        {#if rollWinner && rollRosterCount != null}
+          <div class="winner-roster">Roster: {rollRosterCount} / {ACTIVE_LIMIT}</div>
+        {/if}
         <div class="control-row">
           <button class="tp-pill" onclick={returnToList}>← Return to List</button>
           <button class="tp-pill tp-pill-gold" onclick={goToNextRecruit}>Next Recruit →</button>
         </div>
       {/if}
     </div>
+
+    {#if capacityConflict}
+      <div class="cap-modal-backdrop" role="presentation" onclick={() => capacityConflict = null}>
+        <div class="cap-modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+          <h3>{capacityConflict} just reached {ACTIVE_LIMIT} players</h3>
+          <p>The roster entry was not saved. Adjust the roster before re-running this event.</p>
+          <div class="cap-modal-actions">
+            <a class="tp-pill" href="/theprogram/roster">Open Roster</a>
+            <button class="tp-pill tp-pill-gold" onclick={() => capacityConflict = null}>OK</button>
+          </div>
+        </div>
+      </div>
+    {/if}
 
     <!-- Edit modal -->
     {#if editOpen}
@@ -2184,6 +2239,56 @@
     line-height: 1;
     z-index: 2;
   }
+  /* At-capacity (15/15) badge — oxblood, replaces the X badge. */
+  .full-badge {
+    position: absolute;
+    top: 4px; right: 4px;
+    min-width: 36px; height: 36px; padding: 0 6px;
+    background: rgba(122, 31, 43, 0.92);
+    color: var(--tp-cream);
+    border: 1px solid var(--tp-oxblood);
+    border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: var(--tp-display-condensed);
+    font-weight: 700; font-size: 11px; letter-spacing: 0.08em; line-height: 1.05;
+    z-index: 2;
+  }
+  .full-badge small { font-size: 9px; opacity: 0.9; }
+  .capacity-banner {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 14px 18px;
+    background: rgba(122, 31, 43, 0.08);
+    border: 1px solid var(--tp-oxblood);
+    border-radius: 6px;
+    color: var(--tp-oxblood);
+    font-family: var(--tp-display-condensed);
+    letter-spacing: 0.04em;
+    text-align: center;
+  }
+  .winner-roster {
+    text-align: center;
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tp-gold-2, #b8860b);
+    margin-bottom: 10px;
+  }
+  .cap-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(20, 20, 30, 0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px;
+  }
+  .cap-modal {
+    background: var(--tp-cream); border: 2px solid var(--tp-oxblood); border-radius: 6px;
+    padding: 24px; max-width: 420px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  }
+  .cap-modal h3 {
+    font-family: var(--tp-display-condensed); font-size: 18px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--tp-oxblood); margin: 0 0 8px;
+  }
+  .cap-modal p { color: var(--tp-navy-dark); font-size: 14px; line-height: 1.5; margin: 0 0 18px; }
+  .cap-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
   .school-name {
     font-family: var(--tp-display-condensed);
     font-weight: 700;

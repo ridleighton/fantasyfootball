@@ -398,6 +398,7 @@
             <th>Type</th>
             <th>Player</th>
             <th>School</th>
+            <th>Capacity</th>
             <th>Locked</th>
             <th>In Orig.</th>
             <th>Odds</th>
@@ -427,6 +428,15 @@
               </td>
               <td><input type="text" bind:value={row.player} /></td>
               <td><input type="text" bind:value={row.school} /></td>
+              <td class="cv-capacity">
+                {#if (row.school ?? '').trim() && data.rosterCounts?.[row.school.trim().toLowerCase()] != null}
+                  <span class:cv-cap-full={data.rosterCounts[row.school.trim().toLowerCase()] >= (data.activeLimit ?? 15)}>
+                    {data.rosterCounts[row.school.trim().toLowerCase()]} / {data.activeLimit ?? 15}
+                  </span>
+                {:else}
+                  <span class="cv-cap-dash">—</span>
+                {/if}
+              </td>
               <td>
                 <select
                   value={boolToSelect(row.locked)}
@@ -1023,6 +1033,15 @@
     box-shadow: 0 4px 0 -2px var(--tp-gold);
   }
   .cv-wide { min-width: 240px; }
+  .cv-capacity {
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .cv-cap-full { color: var(--tp-oxblood); }
+  .cv-cap-dash { color: var(--tp-pewter); }
   .cv-del {
     background: transparent;
     border: 1px solid transparent;

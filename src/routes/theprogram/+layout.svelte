@@ -7,7 +7,7 @@
   const navItems = [
     { href: '/theprogram/show', label: 'The Show' },
     { href: '/theprogram/commish', label: 'Commish View' },
-    { href: '/theprogram/rosters', label: 'Rosters' },
+    { href: '/theprogram/roster', label: 'Roster' },
     { href: '/theprogram/config', label: 'Config' }
   ];
 </script>

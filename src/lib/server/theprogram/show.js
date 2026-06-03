@@ -1,4 +1,12 @@
 import { imgurDirectUrl } from './imgur.js';
+import { ACTIVE_LIMIT } from './roster.js';
+
+// Capacity lookup. rosterCounts is a Map<lower(school), active_count>;
+// when omitted (no capacity context) nothing is at capacity.
+function isAtCapacity(rosterCounts, school) {
+  if (!rosterCounts || !school) return false;
+  return (rosterCounts.get(String(school).toLowerCase()) ?? 0) >= ACTIVE_LIMIT;
+}
 
 // ---------------- Image URL resolution ----------------
 // Prefers the new image_url column (Imgur or any direct image host);
@@ -111,7 +119,7 @@ export function commitThreshold(schoolCount) {
 // Commit display: pulls schools from the Odds string. Works for any pair count
 // (including 1). Falls back to per-row school + odds if the Odds string yields
 // no pairs, which preserves backward compatibility with old data shapes.
-export function computeCommit(group) {
+export function computeCommit(group, rosterCounts) {
   let pairs = [];
   for (const r of group.rows) {
     const found = parseOddsPairs(r.odds);
@@ -138,13 +146,18 @@ export function computeCommit(group) {
   }
 
   const list = pairs.map(p => ({ school: p.school, raw: p.percent }));
+  // Capacity runs first: at-capacity schools are dropped from the eligible
+  // pool before any threshold / top-5 logic (and don't count toward the
+  // pool size that sets the threshold tier).
+  for (const s of list) s.at_capacity = isAtCapacity(rosterCounts, s.school);
+  const poolCount = list.filter(s => !s.at_capacity).length;
   // The top-5 cap means a roll never actually runs more than 5 schools,
   // so the tier should reflect a 5-max post-cap pool: 6+ -> tier 5 (10%).
   // Without this clamp a 6-school roll uses the 8% tier and lets a 9%
   // school survive the threshold, only to escape the cap because it
   // was already trimmed to 5 by the threshold cut.
-  const threshold = commitThreshold(Math.min(list.length, 5));
-  for (const s of list) s.eligible = s.raw >= threshold;
+  const threshold = commitThreshold(Math.min(poolCount, 5));
+  for (const s of list) s.eligible = !s.at_capacity && s.raw >= threshold;
 
   // Top-5 cap: a commit roll never has more than 5 schools in the running.
   // If more than 5 pass the threshold, drop everyone below the 5th-place
@@ -173,7 +186,7 @@ export function computeCommit(group) {
 // (if it's not already in the list). Locked is detected from any row.
 // Committed school is always sorted first; remaining schools alphabetical.
 // Each school carries `inOriginalRoll` from its row so we can tag late-joiners.
-export function computeSteal(group) {
+export function computeSteal(group, rosterCounts) {
   const isLocked = group.rows.some(r => r.locked === true);
   const committedSchool = group.rows.find(r => (r.committed_school ?? '').trim())?.committed_school?.trim() ?? null;
 
@@ -198,14 +211,21 @@ export function computeSteal(group) {
   const pct = schools.length > 0 ? 100 / schools.length : 0;
   const committedLower = committedSchool ? committedSchool.toLowerCase() : null;
 
-  const decorated = schools.map(s => ({
-    school: s,
-    normalized: pct,
-    eligible: true,
-    raw: pct,
-    isCommitted: committedLower && s.toLowerCase() === committedLower,
-    inOriginalRoll: inOriginalByLower.get(s.toLowerCase()) ?? null
-  }));
+  const decorated = schools.map(s => {
+    const isCommitted = committedLower && s.toLowerCase() === committedLower;
+    // A stealer at capacity can't participate; the committed school staying
+    // adds no roster entry, so capacity never blocks it.
+    const at_capacity = !isCommitted && isAtCapacity(rosterCounts, s);
+    return {
+      school: s,
+      normalized: pct,
+      eligible: !at_capacity,
+      raw: pct,
+      isCommitted,
+      at_capacity,
+      inOriginalRoll: inOriginalByLower.get(s.toLowerCase()) ?? null
+    };
+  });
 
   decorated.sort((a, b) => {
     if (a.isCommitted) return -1;
@@ -213,11 +233,11 @@ export function computeSteal(group) {
     return a.school.localeCompare(b.school, undefined, { sensitivity: 'base' });
   });
 
-  // Late-joiners (in_original_roll === false) are disqualified from the
-  // draw. If no eligible stealers remain (only late-joiners attempted),
-  // the steal can't really happen — no roll at all.
+  // Late-joiners (in_original_roll === false) and at-capacity schools are
+  // disqualified from the draw. If no eligible stealers remain, the steal
+  // can't really happen — no roll at all.
   const eligibleStealerCount = decorated.filter(
-    s => !s.isCommitted && s.inOriginalRoll !== false
+    s => !s.isCommitted && s.inOriginalRoll !== false && !s.at_capacity
   ).length;
   const noRealAttempt = !isLocked && eligibleStealerCount === 0;
 
@@ -243,9 +263,9 @@ export function computeSteal(group) {
 //     threshold treatment is purely visual for Phase 1, so any bidder
 //     not already in the parsed pool is appended at 0% / ineligible
 //     just to ensure their card renders.
-export function computeAutoCommit(group) {
+export function computeAutoCommit(group, rosterCounts) {
   // Identical parse + threshold + normalization as a Commit event.
-  const { schools, threshold } = computeCommit(group);
+  const { schools, threshold } = computeCommit(group, rosterCounts);
 
   // Collect auto-commit bidders from row.school columns (unique).
   const acSet = new Set();
@@ -254,6 +274,11 @@ export function computeAutoCommit(group) {
     if (sch) acSet.add(sch);
   }
   const autoCommitSchools = [...acSet];
+  // At-capacity bidders are shown (with a FULL badge) but excluded from
+  // the winner pool.
+  const eligibleAutoCommitSchools = autoCommitSchools.filter(
+    s => !isAtCapacity(rosterCounts, s)
+  );
 
   // Ensure every bidder shows up as a card even if they weren't in the
   // parsed odds pool (or were dropped below the threshold). Tag them with
@@ -263,11 +288,13 @@ export function computeAutoCommit(group) {
   const listLower = new Set(list.map(s => s.school.toLowerCase()));
   for (const ac of autoCommitSchools) {
     if (!listLower.has(ac.toLowerCase())) {
+      const at_capacity = isAtCapacity(rosterCounts, ac);
       list.push({
         school: ac,
         raw: 0,
         normalized: 0,
-        eligible: true,
+        eligible: !at_capacity,
+        at_capacity,
         isAcBidderOnly: true
       });
     }
@@ -276,6 +303,7 @@ export function computeAutoCommit(group) {
   return {
     schools: list,
     threshold,
+    eligibleAutoCommitSchools,
     autoCommitSchools,
     solo: autoCommitSchools.length === 1
   };
@@ -296,14 +324,15 @@ export function weightedPick(items, rng = Math.random) {
 
 // ---------------- Roll execution ----------------
 
-export function executeRoll(group) {
+export function executeRoll(group, rosterCounts) {
   const type = (group.type ?? '').trim();
 
   if (type === 'Commit') {
-    const { schools, threshold, solo } = computeCommit(group);
+    const { schools, threshold, solo } = computeCommit(group, rosterCounts);
     const eligible = schools.filter(s => s.eligible);
     if (eligible.length === 0) {
-      return { outcome: 'commit_no_eligible', winner: null, display: { schools, threshold, solo } };
+      const allAtCapacity = schools.length > 0 && schools.every(s => s.at_capacity);
+      return { outcome: allAtCapacity ? 'no_eligible_capacity' : 'commit_no_eligible', winner: null, display: { schools, threshold, solo } };
     }
     if (solo) {
       return { outcome: 'commit_solo', winner: eligible[0].school, display: { schools, threshold, solo } };
@@ -313,7 +342,7 @@ export function executeRoll(group) {
   }
 
   if (type === 'Steal') {
-    const data = computeSteal(group);
+    const data = computeSteal(group, rosterCounts);
     if (data.locked) {
       // Save null so the result column gets the 'LOCKED' marker downstream.
       return { outcome: 'steal_failed_locked', winner: null, display: data };
@@ -329,9 +358,9 @@ export function executeRoll(group) {
         display: data
       };
     }
-    // Build the roll pool: committed + eligible (non-late) stealers, equal weights.
+    // Build the roll pool: committed + eligible (non-late, non-full) stealers.
     const eligible = data.schools.filter(
-      s => s.isCommitted || s.inOriginalRoll !== false
+      s => s.isCommitted || (s.inOriginalRoll !== false && !s.at_capacity)
     );
     const winner = weightedPick(eligible.map(s => ({ value: s.school, weight: 1 })));
     const isStay = data.committedSchool && winner && winner.toLowerCase() === data.committedSchool.toLowerCase();
@@ -342,16 +371,19 @@ export function executeRoll(group) {
   }
 
   if (type === 'Auto-Commit') {
-    const data = computeAutoCommit(group);
-    const ac = data.autoCommitSchools ?? [];
+    const data = computeAutoCommit(group, rosterCounts);
+    const allBidders = data.autoCommitSchools ?? [];
+    const ac = data.eligibleAutoCommitSchools ?? allBidders;
     if (ac.length === 0) {
-      return { outcome: 'auto_commit_no_schools', winner: null, display: data };
+      // No bidders at all, or every bidder is at capacity.
+      const allFull = allBidders.length > 0;
+      return { outcome: allFull ? 'no_eligible_capacity' : 'auto_commit_no_schools', winner: null, display: data };
     }
     if (ac.length === 1) {
-      // Sole bidder — wins automatically, no contested roll.
+      // Sole eligible bidder — wins automatically, no contested roll.
       return { outcome: 'auto_commit_solo_winner', winner: ac[0], display: data };
     }
-    // Contested: equal-weight draw among bidders.
+    // Contested: equal-weight draw among eligible bidders.
     const winner = weightedPick(ac.map(s => ({ value: s, weight: 1 })));
     return { outcome: 'auto_commit_contested', winner, display: data };
   }

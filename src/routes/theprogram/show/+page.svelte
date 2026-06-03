@@ -173,6 +173,8 @@
   let rollRosterCount = $state(null);
   let capacityConflict = $state(null); // school name when a roll was rejected at capacity
   const ACTIVE_LIMIT = data.activeLimit ?? 15;
+  // Solo events that hit a capacity conflict — don't auto-retry their reveal.
+  const soloConflictedIndexes = new Set();
   // Colors for the spinner glow on the slow phase + confetti burst. Defaults
   // to the brand tokens if the winning school has no extracted colors yet.
   let glowPrimary = $state('#D9A441');
@@ -542,6 +544,9 @@
     if (currentEvent.savedResult) return; // already done
     if (editOpen) return;
     if (!isSolo(currentEvent)) return;
+    // Don't auto-retry a solo event that just hit a capacity conflict —
+    // otherwise it would re-reveal and re-conflict in a loop.
+    if (soloConflictedIndexes.has(currentEvent.globalIndex)) return;
 
     const schools = currentEvent.display.schools ?? [];
     const eligible = schools.filter(s => s.eligible !== false);
@@ -552,15 +557,33 @@
     rollOutcome = currentEvent.kind === 'commit' ? 'commit_solo' : 'auto_commit_solo_winner';
     rollState = 'revealed';
 
-    // Fire-and-forget — server returns the same deterministic winner via
-    // executeRoll's solo branch, so the on-screen reveal is already correct.
-    // If the request fails, the next page load will see no saved result
-    // and re-fire this effect.
+    // Server returns the same deterministic winner via executeRoll's solo
+    // branch, so the on-screen reveal is already correct. We still read the
+    // response to surface the post-insert roster count ("Roster: X/15") and
+    // to catch a capacity conflict (which un-reveals and shows the modal).
+    // If the request fails, the next page load re-fires this effect.
+    const evIndex = currentEvent.globalIndex;
     fetch('/theprogram/show/result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventIndex: currentEvent.globalIndex })
-    }).catch(() => { /* best-effort */ });
+      body: JSON.stringify({ eventIndex: evIndex })
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(body => {
+        if (!body) return;
+        // Ignore if the commissioner has since navigated to another event.
+        if (currentEvent?.globalIndex !== evIndex) return;
+        if (body.capacity_conflict) {
+          soloConflictedIndexes.add(evIndex);
+          capacityConflict = body.school;
+          rollWinner = null;
+          rollOutcome = null;
+          rollState = 'idle';
+          return;
+        }
+        rollRosterCount = body.roster_active_count ?? null;
+      })
+      .catch(() => { /* best-effort */ });
   });
 
   // Contested auto-commit second roll. The server already determined the

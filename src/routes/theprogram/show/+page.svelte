@@ -1452,7 +1452,7 @@
           <div class="capacity-banner">
             No eligible schools — all schools in this roll are at capacity. Adjust rosters to give this recruit a home, or mark them uncommitted.
           </div>
-          <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>
+          <button class="tp-pill tp-pill-gold tp-pill-big roll-btn capacity-roll-btn" onclick={() => performRoll()}>
             Mark Uncommitted — Roster Full
           </button>
         {:else if !isSolo(currentEvent)}
@@ -2299,6 +2299,7 @@
     z-index: 2;
   }
   .full-badge small { font-size: 9px; opacity: 0.9; }
+  .capacity-roll-btn { display: inline-block; margin-top: 32px; }
   .capacity-banner {
     max-width: 520px;
     margin: 0 auto;

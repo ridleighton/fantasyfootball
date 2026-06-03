@@ -23,8 +23,13 @@ CREATE TABLE IF NOT EXISTS program_roster (
   week_id       integer REFERENCES program_weeks(id) ON DELETE SET NULL,
   roll_event_id integer REFERENCES program_roll_events(id) ON DELETE SET NULL,
   added_at      timestamptz NOT NULL DEFAULT now(),
-  revoked_at    timestamptz
+  revoked_at    timestamptz,
+  -- why the scholarship was revoked (set when status -> inactive); optional.
+  revoke_reason text
 );
+
+-- Backfill for an existing table created before revoke_reason was added:
+ALTER TABLE program_roster ADD COLUMN IF NOT EXISTS revoke_reason text;
 
 -- Roster page queries by school + status.
 CREATE INDEX IF NOT EXISTS program_roster_school_status_ix

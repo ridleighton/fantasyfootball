@@ -7,6 +7,10 @@
 
   let roster = $state(structuredClone(data.roster ?? []));
 
+  // Conference subtabs — one per configured conference.
+  const conferences = $derived(data.conferences ?? []);
+  let activeConf = $state((data.conferences ?? [])[0] ?? '');
+
   // Per-school UI state.
   let addOpen = $state({});       // school -> add form open?
   let addName = $state({});       // school -> player name
@@ -14,7 +18,13 @@
   let inactiveOpen = $state({});  // school -> inactive section expanded?
   let cardMsg = $state({});       // school -> inline message
   let revokeTarget = $state(null); // roster row pending revoke
+  let revokeReason = $state('');   // reason input for the revoke modal
   let busy = $state(false);
+
+  // Schools in the active conference (from Config).
+  const confSchools = $derived(
+    (data.schools ?? []).filter(s => s.conference === activeConf)
+  );
 
   // Grid import.
   let showImport = $state(false);
@@ -72,21 +82,32 @@
     }
   }
 
+  function openRevoke(row) {
+    revokeTarget = row;
+    revokeReason = '';
+  }
+
   async function confirmRevoke() {
     if (!revokeTarget) return;
     busy = true;
+    const reason = revokeReason.trim();
     try {
       const res = await fetch('/theprogram/roster/revoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roster_id: revokeTarget.id })
+        body: JSON.stringify({ roster_id: revokeTarget.id, reason })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.message ?? `HTTP ${res.status}`);
       // Mutate the row in place — it drops to the inactive section.
       const row = roster.find(r => r.id === revokeTarget.id);
-      if (row) { row.status = 'inactive'; row.revoked_at = body.row?.revoked_at ?? new Date().toISOString(); }
+      if (row) {
+        row.status = 'inactive';
+        row.revoked_at = body.row?.revoked_at ?? new Date().toISOString();
+        row.revoke_reason = body.row?.revoke_reason ?? (reason || null);
+      }
       revokeTarget = null;
+      revokeReason = '';
     } catch (e) {
       cardMsg[revokeTarget.school_name] = `Revoke failed: ${e.message}`;
       revokeTarget = null;
@@ -155,11 +176,26 @@
     {/if}
   </div>
 
+  <nav class="cv-subtabs" role="tablist" aria-label="Conference">
+    {#each conferences as conf}
+      <button
+        type="button"
+        role="tab"
+        class="cv-subtab"
+        class:active={activeConf === conf}
+        aria-selected={activeConf === conf}
+        onclick={() => activeConf = conf}
+      >{conf}</button>
+    {/each}
+  </nav>
+
   {#if data.schools.length === 0}
     <p class="rs-empty">No schools yet. Add schools under Config first.</p>
+  {:else if confSchools.length === 0}
+    <p class="rs-empty">No schools in {activeConf}. Assign schools to this conference under Config.</p>
   {:else}
     <div class="rs-grid">
-      {#each data.schools as s (s.name)}
+      {#each confSchools as s (s.name)}
         {@const g = forSchool(s.name)}
         {@const full = g.active.length >= LIMIT}
         <section class="rs-card" class:full>
@@ -185,7 +221,7 @@
                   {#if r.source === 'show' && r.week_id != null && data.weekMap[r.week_id] != null}
                     <span class="rs-badge rs-wk">WK {data.weekMap[r.week_id]}</span>
                   {/if}
-                  <button type="button" class="rs-revoke" onclick={() => revokeTarget = r}>Revoke Scholarship</button>
+                  <button type="button" class="rs-revoke" onclick={() => openRevoke(r)}>Revoke Scholarship</button>
                 </li>
               {/each}
             </ul>
@@ -226,6 +262,7 @@
                       <span class="rs-player">{r.player_name}</span>
                       <span class="rs-badge">{r.source === 'show' ? 'SHOW' : 'MANUAL'}</span>
                       {#if r.revoked_at}<span class="rs-revoked">Revoked {fmtDate(r.revoked_at)}</span>{/if}
+                      {#if r.revoke_reason}<span class="rs-reason">Reason: {r.revoke_reason}</span>{/if}
                     </li>
                   {/each}
                 </ul>
@@ -246,6 +283,16 @@
         This moves {revokeTarget.player_name} from {revokeTarget.school_name}'s active roster to the inactive list.
         Their slot opens immediately. This cannot be undone from this page.
       </p>
+      <label class="rs-reason-label" for="revoke-reason">Reason for removal (optional)</label>
+      <input
+        id="revoke-reason"
+        type="text"
+        class="tp-field rs-reason-input"
+        maxlength="200"
+        placeholder="e.g. transferred, decommitted, off the board"
+        bind:value={revokeReason}
+        onkeydown={(ev) => { if (ev.key === 'Enter') confirmRevoke(); }}
+      />
       <div class="rs-modal-actions">
         <button type="button" class="tp-pill tp-pill-small" onclick={() => revokeTarget = null}>Cancel</button>
         <button type="button" class="tp-pill tp-pill-small rs-revoke" onclick={confirmRevoke} disabled={busy}>
@@ -268,6 +315,30 @@
   .rs-rule { height: 2px; background: var(--tp-gold); margin: 14px 0 22px; }
   .rs-empty, .rs-none { color: var(--tp-pewter-deep); font-style: italic; }
   .rs-none { font-size: 13px; margin: 6px 0; }
+
+  /* Conference subtabs (underline tab style) */
+  .cv-subtabs {
+    display: flex; flex-wrap: wrap; gap: 2px;
+    border-bottom: 1px solid var(--tp-pewter);
+    margin-bottom: 24px;
+  }
+  .cv-subtab {
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    color: var(--tp-pewter-deep);
+    font-family: var(--tp-display-condensed);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .cv-subtab:hover { color: var(--tp-navy-dark); }
+  .cv-subtab.active { color: var(--tp-navy); border-bottom-color: var(--tp-gold); }
 
   .rs-import { margin-bottom: 24px; }
   .rs-import-msg { margin-left: 10px; font-size: 12px; font-style: italic; color: var(--tp-navy-dark); }
@@ -340,6 +411,7 @@
   .rs-inactive-list { margin-top: 4px; opacity: 0.55; }
   .rs-inactive-list:hover { opacity: 0.85; }
   .rs-revoked { font-style: italic; font-size: 12px; color: var(--tp-pewter-deep); margin-left: auto; }
+  .rs-reason { flex-basis: 100%; font-size: 12px; font-style: italic; color: var(--tp-navy-dark); }
 
   .rs-modal-backdrop {
     position: fixed; inset: 0; background: rgba(20, 20, 30, 0.55);
@@ -353,6 +425,16 @@
     font-family: var(--tp-display-condensed); font-size: 18px; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--tp-navy-dark); margin: 0 0 10px;
   }
-  .rs-modal p { color: var(--tp-navy-dark); font-size: 14px; line-height: 1.5; margin: 0 0 18px; }
+  .rs-modal p { color: var(--tp-navy-dark); font-size: 14px; line-height: 1.5; margin: 0 0 14px; }
+  .rs-reason-label {
+    display: block;
+    font-family: var(--tp-display-condensed);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tp-pewter-deep);
+    margin-bottom: 4px;
+  }
+  .rs-reason-input { width: 100%; margin-bottom: 18px; }
   .rs-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 </style>

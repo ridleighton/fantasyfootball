@@ -41,7 +41,7 @@ export async function getRosterCounts(db) {
 export async function getRosterForSchool(db, schoolName) {
   const res = await db.query(
     `SELECT id, school_name, player_name, conference, status, source,
-            week_id, roll_event_id, added_at, revoked_at
+            week_id, roll_event_id, added_at, revoked_at, revoke_reason
        FROM program_roster
       WHERE LOWER(school_name) = LOWER($1)
       ORDER BY player_name ASC`,
@@ -97,15 +97,17 @@ export async function addPlayerToRoster(db, opts) {
   return res.rows[0];
 }
 
-// Move an active player to inactive. Caller controls the transaction.
-export async function revokeScholarship(db, rosterId) {
+// Move an active player to inactive, recording an optional reason. Caller
+// controls the transaction.
+export async function revokeScholarship(db, rosterId, reason = null) {
+  const cleanReason = reason ? String(reason).trim() || null : null;
   const res = await db.query(
     `UPDATE program_roster
-        SET status = 'inactive', revoked_at = now()
+        SET status = 'inactive', revoked_at = now(), revoke_reason = $2
       WHERE id = $1
       RETURNING id, school_name, player_name, conference, status, source,
-                week_id, roll_event_id, added_at, revoked_at`,
-    [rosterId]
+                week_id, roll_event_id, added_at, revoked_at, revoke_reason`,
+    [rosterId, cleanReason]
   );
   if (res.rows.length === 0) throw new RosterError('NOT_FOUND', 'Roster entry not found.');
   return res.rows[0];

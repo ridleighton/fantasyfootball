@@ -12,7 +12,7 @@ export async function load() {
       db.query(`SELECT name FROM program_conferences ORDER BY name ASC`).catch(() => ({ rows: [] })),
       db.query(
         `SELECT id, school_name, player_name, conference, status, source,
-                week_id, roll_event_id, added_at, revoked_at
+                week_id, roll_event_id, added_at, revoked_at, revoke_reason
            FROM program_roster
           ORDER BY player_name ASC`
       ).catch(() => ({ rows: [] })),

@@ -7,11 +7,12 @@ export async function POST({ request }) {
   const body = await request.json().catch(() => null);
   const rosterId = Number.parseInt(body?.roster_id, 10);
   if (!Number.isInteger(rosterId)) throw error(400, 'roster_id is required.');
+  const reason = body?.reason ? String(body.reason) : null;
 
   const db = await createClient();
   try {
     await db.query('BEGIN');
-    const row = await revokeScholarship(db, rosterId);
+    const row = await revokeScholarship(db, rosterId, reason);
     await db.query('COMMIT');
     const counts = await getRosterCounts(db);
     return json({ ok: true, row, active_count: counts.get(row.school_name) ?? 0 });

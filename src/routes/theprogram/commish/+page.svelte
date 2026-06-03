@@ -13,11 +13,12 @@
   // ---- Top-level subtabs ----
   // Add new entries here to grow the commish view later.
   const TABS = [
+    { key: 'roll', label: 'Roll Information' },
     { key: 'players', label: 'Player Priority' },
     { key: 'schools', label: 'School Priority' },
     { key: 'show', label: 'Show Run' }
   ];
-  let activeTab = $state('players');
+  let activeTab = $state('roll');
 
   // ---- Show Run order (drag-to-reorder + priority recommendations) ----
   const ROLL_TYPE_ORDER = ['steal', 'auto-commit', 'commit'];
@@ -382,7 +383,7 @@
     {/each}
   </nav>
 
-  {#if activeTab === 'players'}
+  {#if activeTab === 'roll'}
   {#if form?.message}
     <div class="tp-alert tp-alert-error">{form.message}</div>
   {/if}
@@ -476,7 +477,9 @@
       </button>
     </div>
   </form>
+  {/if}
 
+  {#if activeTab === 'players'}
   <section class="cp-section">
     <header class="cp-head">
       <h2>Coach Priority Lists</h2>
@@ -644,7 +647,7 @@
 
     {#if orderBlocks !== null}
       {#if orderConferences().length === 0}
-        <p class="cp-empty">No show-run order yet. Import a week and add recruits on the Player Priority tab first.</p>
+        <p class="cp-empty">No show-run order yet. Import a week and add recruits on the Roll Information tab first.</p>
       {:else}
         {#each orderConferences() as conf (conf.conference)}
           <div class="cv-sg-conf">
@@ -713,7 +716,7 @@
     <div class="cv-orig">
       <h3>Original Recruit List</h3>
       {#if originalRecruits.length === 0}
-        <p class="cp-empty">No recruits yet. Add rows on the Player Priority tab (recruits not flagged <strong>In Orig. = No</strong> appear here).</p>
+        <p class="cp-empty">No recruits yet. Add rows on the Roll Information tab (recruits not flagged <strong>In Orig. = No</strong> appear here).</p>
       {:else}
         <table class="cp-table cv-orig-table">
           <thead>

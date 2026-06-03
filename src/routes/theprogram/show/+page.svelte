@@ -763,6 +763,89 @@
     return `tp-stamp ${kind === 'steal' ? 'tp-stamp-oxblood' : kind === 'auto' ? '' : 'tp-stamp-gold'}`;
   }
 
+  // ---------- Gossip Girl over-subscription advisory ----------
+  const GOSSIP_POOL = [
+    "Hold up, partner. {School} is in on {X} rolls with only {Seats} seat(s) left, so <b>{Player}</b> is the smarter next move ({Reason}). But you run this room — your call.",
+    "Spotted: {School} is in on {X} rolls with just {Seats} seat(s) to give. Save the next one for <b>{Player}</b> — {Reason}. A little tip, from me to you.",
+    "Psst, Tristan. {School}'s juggling {X} rolls and only {Seats} seat(s) remain. <b>{Player}</b> would look awfully good rolled next ({Reason}). But you already knew that, clever thing.",
+    "Careful with that trigger finger — {School} has {X} rolls in play and {Seats} seat(s) open. <b>{Player}</b> is the move, since {Reason}. I do love a commissioner with a plan.",
+    "Knock knock — just me. {School} is in on {X} rolls with {Seats} seat(s) left, so maybe <b>{Player}</b> next? {Reason}. No pressure… mostly.",
+    "Shhh, just between us? {School} is spread across {X} rolls with only {Seats} seat(s) to spare. <b>{Player}</b> next is the kind of decisive I rather like — {Reason}.",
+    "You didn't hear it from me, but {School}'s in on {X} rolls, {Seats} seat(s) remaining. <b>{Player}</b> next is the power move ({Reason}), and power looks good on you.",
+    "Hate to be that girl, but {School} has {X} rolls and only {Seats} seat(s) left. <b>{Player}</b> deserves the next spotlight ({Reason}). Trust me on this one.",
+    "Before you press anything — and I do enjoy the suspense — {School} has {X} rolls and {Seats} seat(s) left. <b>{Player}</b> deserves the next spotlight ({Reason}). Make me proud."
+  ];
+
+  let gossipCards = $state([]);       // [{ school, seats, x, player, reason, targetPlayer, targetConference, text }]
+  let gossipChecking = $state(false);
+  let gossipDismissed = $state(new Set());
+
+  function gossipFill(t, c) {
+    return t
+      .replaceAll('{School}', c.school)
+      .replaceAll('{X}', c.x)
+      .replaceAll('{Seats}', c.seats)
+      .replaceAll('{Player}', c.player)
+      .replaceAll('{Reason}', c.reason);
+  }
+
+  function shuffledIndices(n) {
+    const a = Array.from({ length: n }, (_, i) => i);
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  async function loadGossip(ev) {
+    if (!ev || ev.kind !== 'commit' || ev.savedResult) { gossipCards = []; return; }
+    gossipChecking = true;
+    try {
+      const res = await fetch('/theprogram/show/gossip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventIndex: ev.globalIndex })
+      });
+      const body = await res.json().catch(() => ({ schools: [] }));
+      const cards = body.schools ?? [];
+      // Assign each card a base text without repeating until the pool's exhausted.
+      const order = shuffledIndices(GOSSIP_POOL.length);
+      gossipCards = cards.map((c, i) => ({ ...c, text: gossipFill(GOSSIP_POOL[order[i % order.length]], c) }));
+    } catch {
+      gossipCards = [];
+    } finally {
+      gossipChecking = false;
+    }
+  }
+
+  // Re-run the check whenever the loaded event changes.
+  $effect(() => {
+    const ev = currentEvent;
+    gossipDismissed = new Set();
+    if (ev && ev.kind === 'commit' && !ev.savedResult) loadGossip(ev);
+    else gossipCards = [];
+  });
+
+  const visibleGossip = $derived(gossipCards.filter(c => !gossipDismissed.has(c.school)));
+
+  function gossipDismissCard(card) {
+    gossipDismissed = new Set([...gossipDismissed, card.school]);
+  }
+  function gossipDismissAll() {
+    gossipDismissed = new Set(gossipCards.map(c => c.school));
+  }
+  function gossipGoTo(card) {
+    const conf = (data.conferenceList ?? []).find(c => c.name === card.targetConference);
+    const idx = conf
+      ? conf.events.findIndex(e => (e.player ?? '').toLowerCase() === (card.targetPlayer ?? '').toLowerCase())
+      : -1;
+    gossipDismissCard(card);
+    if (conf && idx >= 0) {
+      goto(`/theprogram/show?conf=${encodeURIComponent(conf.name)}&i=${idx}`, { invalidateAll: true });
+    }
+  }
+
   const previouslyRolled = $derived(currentEvent?.savedResult ?? null);
 
   // Visually-hidden announcement for screen readers — populated when
@@ -1113,6 +1196,44 @@
          once the reveal lands. Always mounted so screen readers track it
          consistently; populated only when an outcome resolves. -->
     <div class="sr-only" role="status" aria-live="polite">{revealAnnouncement}</div>
+
+    <!-- Gossip Girl over-subscription advisory (purely advisory, never blocks) -->
+    {#if visibleGossip.length > 0 && rollState === 'idle' && !editOpen}
+      <aside class="gg-panel" class:gg-multi={visibleGossip.length > 1} aria-label="Roster advisory">
+        <div class="gg-sheen" aria-hidden="true"></div>
+        <span class="gg-spark gg-spark-1" aria-hidden="true">✦</span>
+        <span class="gg-spark gg-spark-2" aria-hidden="true">✦</span>
+        <span class="gg-spark gg-spark-3" aria-hidden="true">✦</span>
+        <div class="gg-seal" aria-hidden="true">LR</div>
+
+        {#if visibleGossip.length > 1}
+          <div class="gg-head">
+            <h3>Busy night, Tristan — a few are cutting it close.</h3>
+            <button class="gg-dismiss-all" onclick={gossipDismissAll}>Dismiss all</button>
+          </div>
+        {:else}
+          <div class="gg-eyebrow">Hold it right there</div>
+        {/if}
+
+        {#each visibleGossip as card (card.school)}
+          <div class="gg-card">
+            {#if visibleGossip.length > 1}
+              <div class="gg-who">
+                <span class="gg-name">{card.school}</span>
+                <span class="gg-squeeze">{card.seats} seat{card.seats === 1 ? '' : 's'} · {card.x} rolls</span>
+              </div>
+            {/if}
+            <p class="gg-body">{@html card.text}</p>
+            <div class="gg-actions">
+              <button class="gg-cta" onclick={() => gossipGoTo(card)}>Roll {card.player} →</button>
+              <button class="gg-x" onclick={() => gossipDismissCard(card)}>dismiss</button>
+            </div>
+          </div>
+        {/each}
+
+        <div class="gg-sig"><span class="gg-xo">xoxo, </span><span class="gg-gg">Gossip Girl</span></div>
+      </aside>
+    {/if}
     <div class="event-topbar">
       <button class="tp-pill tp-pill-navy tp-pill-small" onclick={returnToList}>← Return to List</button>
       <div class="event-breadcrumb">
@@ -1459,6 +1580,12 @@
           <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>
             {currentEvent.kind === 'auto' ? 'Reveal Auto-Commits' : 'Roll'}
           </button>
+          {#if gossipChecking}
+            <div class="gg-checking" aria-live="polite">
+              <span class="gg-dot"></span><span class="gg-dot"></span><span class="gg-dot"></span>
+              Gossip Girl is doing the math…
+            </div>
+          {/if}
         {/if}
       {:else if rollState === 'revealed'}
         {#if rollWinner && rollRosterCount != null}
@@ -2899,4 +3026,82 @@
   }
   .edit-note { color: var(--tp-muted); font-size: 12px; font-style: italic; }
   .edit-actions { display: inline-flex; gap: 8px; }
+
+  /* ---------- Gossip Girl advisory note (Elle Woods: ivory + gold) ---------- */
+  .gg-panel {
+    position: fixed;
+    top: 96px;
+    right: clamp(12px, 2.5vw, 40px);
+    width: min(380px, 92vw);
+    z-index: 40;
+    background: #FFFCF6;
+    color: #241C17;
+    border-radius: 14px;
+    padding: 26px 26px 18px;
+    box-shadow: 0 1px 0 #B8902E inset, 0 24px 48px -24px rgba(60,40,15,.5), 0 0 0 1px #EADCC0;
+    font-family: var(--tp-body, system-ui);
+    animation: gg-rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .gg-panel::before { content:""; position:absolute; inset:7px; border:1px solid #B8902E; border-radius:8px; pointer-events:none; opacity:.55; }
+  .gg-panel::after  { content:""; position:absolute; inset:11px; border:1px solid #EADCC0; border-radius:5px; pointer-events:none; }
+  @keyframes gg-rise { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:none } }
+
+  .gg-sheen { position:absolute; inset:0; border-radius:14px; overflow:hidden; pointer-events:none; z-index:1; }
+  .gg-sheen::after {
+    content:""; position:absolute; top:-50%; left:-70%; width:45%; height:200%; transform:rotate(18deg);
+    background:linear-gradient(90deg,transparent,rgba(215,180,88,.05),rgba(255,250,235,.11),rgba(215,180,88,.05),transparent);
+    animation:gg-sweep 9s ease-in-out infinite;
+  }
+  @keyframes gg-sweep { 0%{left:-70%} 14%{left:150%} 100%{left:150%} }
+
+  .gg-spark { position:absolute; color:#D7B458; pointer-events:none; z-index:3; line-height:1; filter:drop-shadow(0 0 3px rgba(215,180,88,.7)); animation:gg-twinkle 3s ease-in-out infinite; }
+  .gg-spark-1 { top:-12px; right:18px; font-size:14px; animation-delay:.1s; }
+  .gg-spark-2 { top:-26px; right:54px; font-size:10px; animation-delay:1.1s; }
+  .gg-spark-3 { top:10px; left:14px; font-size:9px; animation-delay:2.2s; }
+  @keyframes gg-twinkle { 0%,100%{opacity:0; transform:scale(.25) rotate(0)} 45%{opacity:1; transform:scale(1) rotate(90deg)} 65%{opacity:.5; transform:scale(.8) rotate(125deg)} }
+
+  .gg-seal {
+    position:absolute; top:-20px; right:22px; width:52px; height:52px; border-radius:50%; z-index:2;
+    background:#241C17; border:2px solid #B8902E; display:grid; place-items:center;
+    font-family:var(--tp-display, serif); font-weight:800; font-size:18px; color:#D7B458;
+    box-shadow:0 8px 16px -6px rgba(0,0,0,.45); letter-spacing:-.04em;
+  }
+
+  .gg-eyebrow { position:relative; z-index:2; display:flex; align-items:center; gap:9px; font-size:10.5px; letter-spacing:.3em; text-transform:uppercase; font-weight:700; color:#B8902E; margin-bottom:14px; }
+  .gg-eyebrow::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,#B8902E,transparent); }
+
+  .gg-head { position:relative; z-index:2; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:8px; }
+  .gg-head h3 { font-family:var(--tp-display, serif); font-style:italic; font-weight:500; font-size:18px; line-height:1.25; color:#241C17; margin:0; }
+  .gg-dismiss-all { background:none; border:none; color:#B8902E; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; white-space:nowrap; }
+
+  .gg-card { position:relative; z-index:2; border-top:1px solid #EADCC0; padding:14px 0 2px; }
+  .gg-panel:not(.gg-multi) .gg-card { border-top:none; padding-top:0; }
+  .gg-who { display:flex; align-items:center; gap:9px; margin-bottom:7px; }
+  .gg-name { font-family:var(--tp-display, serif); font-weight:700; font-size:16px; color:#241C17; }
+  .gg-squeeze { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; background:#FBF4E6; border:1px solid #B8902E; color:#B8902E; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .gg-body { position:relative; z-index:2; font-size:15.5px; line-height:1.6; color:#34281F; margin:0; }
+  .gg-body :global(b) { color:#241C17; font-weight:700; border-bottom:2px solid #D7B458; padding-bottom:1px; }
+
+  .gg-actions { position:relative; z-index:2; display:flex; align-items:center; gap:14px; margin-top:16px; }
+  .gg-cta { border:1px solid #B8902E; cursor:pointer; background:#241C17; color:#FFFCF6; font-family:var(--tp-body, system-ui); font-weight:700; font-size:13px; padding:11px 16px; border-radius:9px; transition:background .2s,color .2s,transform .1s; }
+  .gg-cta:hover { background:#B8902E; color:#241C17; transform:translateY(-1px); }
+  .gg-x { background:none; border:none; cursor:pointer; color:#7A6A5C; font-size:12.5px; font-weight:600; text-decoration:underline; text-underline-offset:3px; text-decoration-color:#B8902E; }
+  .gg-x:hover { color:#241C17; }
+
+  .gg-sig { position:relative; z-index:2; margin-top:16px; padding-top:12px; border-top:1px solid #EADCC0; text-align:right; font-family:var(--tp-display, serif); font-style:italic; }
+  .gg-xo { font-weight:500; font-size:15px; color:#7A6A5C; }
+  .gg-gg { font-weight:800; font-size:18px; color:#241C17; }
+
+  .gg-checking { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px; font-size:12.5px; letter-spacing:.03em; color:var(--tp-muted, #7a6a5c); }
+  .gg-dot { width:7px; height:7px; border-radius:50%; background:#D7B458; animation:gg-pulse 1s infinite; }
+  .gg-dot:nth-child(2){animation-delay:.15s} .gg-dot:nth-child(3){animation-delay:.3s}
+  @keyframes gg-pulse { 0%,100%{opacity:.3; transform:scale(.8)} 50%{opacity:1; transform:scale(1.1)} }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gg-panel, .gg-sheen::after, .gg-spark, .gg-dot { animation: none !important; }
+    .gg-spark { opacity:.65; }
+  }
+  @media (max-width: 1180px) {
+    .gg-panel { position: static; width: auto; max-width: 480px; margin: 20px auto 0; }
+  }
 </style>

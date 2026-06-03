@@ -49,10 +49,16 @@ export async function computeGossipFlags(db, weekId, eventIndex) {
   const ranking = new Map(
     rankRes.rows.map(r => [lower(r.player_name), { tier: Number(r.tier), rank: Number(r.rank) }])
   );
-  // school|player|conference -> priority
+  // school|player -> priority. Keyed without conference: a school's priority
+  // list ranks players, and coach lists frequently label the conference
+  // differently than the events — requiring a conference match would demote
+  // a school's own #1 to the ranking tier and mis-fire the advisory. If a
+  // player appears more than once, keep their best (lowest) priority.
   const coachPri = new Map();
   for (const c of coachRes.rows) {
-    coachPri.set(`${lower(c.school_name)}|${lower(c.player_name)}|${lower(c.conference)}`, Number(c.priority));
+    const key = `${lower(c.school_name)}|${lower(c.player_name)}`;
+    const p = Number(c.priority);
+    if (!coachPri.has(key) || p < coachPri.get(key)) coachPri.set(key, p);
   }
 
   // All un-rolled commit events, with their global index (matches the
@@ -75,7 +81,7 @@ export async function computeGossipFlags(db, weekId, eventIndex) {
     // Recommended order: priority-list tier (by priority), then ranking tier
     // (by tier, then rank). Players with neither sort last.
     const decorated = inOn.map(({ ev, globalIndex }) => {
-      const pri = coachPri.get(`${sLower}|${lower(ev.player)}|${lower(ev.conference)}`);
+      const pri = coachPri.get(`${sLower}|${lower(ev.player)}`);
       const rk = ranking.get(lower(ev.player)) ?? null;
       return {
         player: ev.player,

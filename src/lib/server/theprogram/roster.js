@@ -86,12 +86,26 @@ export async function addPlayerToRoster(db, opts) {
     throw new RosterError('DUPLICATE_PLAYER', `${playerName} is already on ${schoolName}'s active roster for ${conference}.`);
   }
 
+  // Upsert on roll_event_id so re-processing a show (after revoking the
+  // first run's entries) reactivates/reassigns the event's roster row
+  // rather than colliding with the unique index. Manual adds (null
+  // roll_event_id) never conflict and just insert.
   const res = await db.query(
     `INSERT INTO program_roster
        (school_name, player_name, conference, status, source, week_id, roll_event_id)
      VALUES ($1, $2, $3, 'active', $4, $5, $6)
+     ON CONFLICT (roll_event_id) WHERE roll_event_id IS NOT NULL
+     DO UPDATE SET school_name = EXCLUDED.school_name,
+                   player_name = EXCLUDED.player_name,
+                   conference = EXCLUDED.conference,
+                   status = 'active',
+                   source = EXCLUDED.source,
+                   week_id = EXCLUDED.week_id,
+                   revoked_at = NULL,
+                   revoke_reason = NULL,
+                   added_at = now()
      RETURNING id, school_name, player_name, conference, status, source,
-               week_id, roll_event_id, added_at, revoked_at`,
+               week_id, roll_event_id, added_at, revoked_at, revoke_reason`,
     [schoolName, playerName, conference, source, weekId, rollEventId]
   );
   return res.rows[0];
@@ -142,8 +156,18 @@ export async function transferPlayer(db, opts) {
     `INSERT INTO program_roster
        (school_name, player_name, conference, status, source, week_id, roll_event_id)
      VALUES ($1, $2, $3, 'active', 'show', $4, $5)
+     ON CONFLICT (roll_event_id) WHERE roll_event_id IS NOT NULL
+     DO UPDATE SET school_name = EXCLUDED.school_name,
+                   player_name = EXCLUDED.player_name,
+                   conference = EXCLUDED.conference,
+                   status = 'active',
+                   source = EXCLUDED.source,
+                   week_id = EXCLUDED.week_id,
+                   revoked_at = NULL,
+                   revoke_reason = NULL,
+                   added_at = now()
      RETURNING id, school_name, player_name, conference, status, source,
-               week_id, roll_event_id, added_at, revoked_at`,
+               week_id, roll_event_id, added_at, revoked_at, revoke_reason`,
     [toSchool, playerName, conference, weekId, rollEventId]
   );
   return res.rows[0];

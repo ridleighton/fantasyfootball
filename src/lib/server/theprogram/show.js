@@ -176,9 +176,11 @@ export function computeCommit(group, rosterCounts) {
   for (const s of list) {
     s.normalized = (s.eligible && totalEligible > 0) ? (s.raw / totalEligible) * 100 : 0;
   }
-  // Solo: exactly one school in the running → no roll, just award.
+  // Solo: exactly one *eligible* school → no roll, just award. A lone
+  // school that's at capacity (or otherwise ineligible) is NOT solo — it
+  // falls through to the no-eligible path so its FULL state renders.
   const eligibleCount = list.filter(s => s.eligible).length;
-  const solo = list.length === 1 || eligibleCount === 1;
+  const solo = eligibleCount === 1;
   return { schools: list, threshold, solo };
 }
 
@@ -472,6 +474,9 @@ export function colorsForSchool(photos, schoolName) {
 export function formatOutcomeLabel(group) {
   const winner = group.rows.find(r => r.result)?.result ?? null;
   if (!winner) return '';
+
+  // Sentinel: no eligible school (all at capacity) → recruit stays uncommitted.
+  if (winner === 'ROSTER FULL') return 'Not committed — roster full';
 
   if (group.type === 'Commit') {
     return `Committed to ${winner}`;

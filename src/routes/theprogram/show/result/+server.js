@@ -43,6 +43,10 @@ export async function POST({ request }) {
     const rollEventId = ev.rows[0]?.id ?? null;
     let valueToSave = result.winner;
     if (!valueToSave && result.outcome === 'steal_failed_locked') valueToSave = 'LOCKED';
+    // No eligible schools because every candidate is at capacity: mark the
+    // event complete with a sentinel result so it counts as resolved and
+    // reads "recruit not committed — roster full" everywhere.
+    if (!valueToSave && result.outcome === 'no_eligible_capacity') valueToSave = 'ROSTER FULL';
 
     // Roster mutation + outcome write happen in one transaction. The roster
     // step runs inside a SAVEPOINT so it can't break the roll: a CAPACITY_FULL

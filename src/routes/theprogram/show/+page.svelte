@@ -381,8 +381,9 @@
     // no server call up front. The Reveal button just plays the megaphone
     // / fade animation that exposes who actually bid. Resolution happens
     // either after the fade (solo bidder) or only after the commissioner
-    // clicks the Phase 2 Roll (contested bidders).
-    if (currentEvent.kind === 'auto') {
+    // clicks the Phase 2 Roll (contested bidders). Skipped when every bidder
+    // is at capacity — that resolves directly to "roster full" below.
+    if (currentEvent.kind === 'auto' && !currentEvent.capacityBlocked) {
       return performAutoCommitReveal();
     }
 
@@ -390,7 +391,8 @@
     // commissioner doesn't know it's locked until after the spin lands.
     const skipSpinner =
       opts.instant === true ||
-      isSolo(currentEvent);
+      isSolo(currentEvent) ||
+      currentEvent.capacityBlocked; // no eligible schools → no spin, just record
 
     if (!skipSpinner) {
       rollState = 'spinning';
@@ -786,6 +788,9 @@
     if (currentEvent.kind === 'auto' && rollWinner) {
       return `${rollWinner} has auto-committed ${currentEvent.player}.`;
     }
+    if (rollOutcome === 'no_eligible_capacity') {
+      return `${currentEvent.player} did not commit — every school in this roll is at capacity.`;
+    }
     return '';
   });
 
@@ -1153,6 +1158,13 @@
               <span class="stamp-sub">Commitment Ironclad</span>
             </div>
           </div>
+        {:else if rollState === 'revealed' && rollOutcome === 'no_eligible_capacity'}
+          <div class="rect-stamp player-stamp" use:stampIn={{ thudTarget: '.player-wrap' }} aria-label="Roster full">
+            <div class="rect-stamp-inner">
+              <span class="stamp-label">Roster Full</span>
+              <span class="stamp-sub">Not Committed</span>
+            </div>
+          </div>
         {/if}
       </div>
     </header>
@@ -1427,7 +1439,9 @@
       {:else if previouslyRolled && rollState === 'idle' && acPhase === 'off'}
         <div class="prev-note">
           Already rolled · saved result
-          <b>{previouslyRolled === 'LOCKED' ? 'Locked' : previouslyRolled}</b>
+          <b>{previouslyRolled === 'LOCKED' ? 'Locked'
+            : previouslyRolled === 'ROSTER FULL' ? 'Not committed — roster full'
+            : previouslyRolled}</b>
         </div>
         <div class="control-row">
           <button class="tp-pill" onclick={returnToList}>← Return to List</button>
@@ -1436,8 +1450,11 @@
       {:else if rollState === 'idle' && acPhase === 'off'}
         {#if currentEvent.capacityBlocked}
           <div class="capacity-banner">
-            No eligible schools — all schools in this roll are at capacity. Adjust rosters before running this event.
+            No eligible schools — all schools in this roll are at capacity. Adjust rosters to give this recruit a home, or mark them uncommitted.
           </div>
+          <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>
+            Mark Uncommitted — Roster Full
+          </button>
         {:else if !isSolo(currentEvent)}
           <button class="tp-pill tp-pill-gold tp-pill-big roll-btn" onclick={() => performRoll()}>
             {currentEvent.kind === 'auto' ? 'Reveal Auto-Commits' : 'Roll'}

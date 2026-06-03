@@ -1123,6 +1123,13 @@
               <span class="stamp-sub">Commitment Secured</span>
             </div>
           </div>
+        {:else if isLockedReveal()}
+          <div class="rect-stamp player-stamp" use:stampIn={{ thudTarget: '.player-wrap' }} aria-label="Locked">
+            <div class="rect-stamp-inner">
+              <span class="stamp-label">Locked</span>
+              <span class="stamp-sub">Commitment Ironclad</span>
+            </div>
+          </div>
         {/if}
       </div>
     </header>
@@ -1151,7 +1158,6 @@
            drives its messaging through the player-name stamp only. -->
       {@const locked = isLockedReveal()}
       {@const showBars = locked && !s.isCommitted && data.barsImage}
-      {@const showLockSlap = locked && s.isCommitted}
       {@const dropping = locked}
       {@const showLateTag = locked && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
       <div
@@ -1197,14 +1203,6 @@
           {/if}
           {#if showBars}
             <img src={data.barsImage} alt="" class="bars-overlay" referrerpolicy="no-referrer" />
-          {/if}
-          {#if showLockSlap}
-            <div class="rect-stamp card-stamp" use:stampIn={{ thudTarget: '.school-card' }} aria-label="Locked">
-              <div class="rect-stamp-inner">
-                <span class="stamp-label">Locked</span>
-                <span class="stamp-sub">Commitment Ironclad</span>
-              </div>
-            </div>
           {/if}
         </div>
         <div class="school-name">{s.school}</div>

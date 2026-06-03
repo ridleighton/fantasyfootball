@@ -3030,7 +3030,7 @@
   /* ---------- Gossip Girl advisory note (Elle Woods: ivory + gold) ---------- */
   .gg-panel {
     position: fixed;
-    top: 96px;
+    top: 140px;
     right: clamp(12px, 2.5vw, 40px);
     width: min(380px, 92vw);
     z-index: 40;

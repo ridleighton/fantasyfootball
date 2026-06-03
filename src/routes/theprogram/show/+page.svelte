@@ -743,7 +743,10 @@
   }
 
   async function loadGossip(ev) {
-    if (!ev || ev.kind !== 'commit' || ev.savedResult) { gossipCards = []; return; }
+    // Clear immediately so the prior event's note can't flash on this one
+    // while the new check runs — the panel only appears once it resolves.
+    gossipCards = [];
+    if (!ev || ev.kind !== 'commit' || ev.savedResult) return;
     gossipChecking = true;
     try {
       const res = await fetch('/theprogram/show/gossip', {

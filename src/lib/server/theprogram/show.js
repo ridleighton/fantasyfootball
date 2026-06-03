@@ -52,7 +52,10 @@ export function parseOddsPairs(s) {
     if (!numMatch) continue;
     const numStart = chunk.lastIndexOf(numMatch[0]);
     let school = chunk.slice(0, numStart).trim();
-    school = school.replace(/[:\-–—()[\]\s]+$/, '').trim();
+    // Strip trailing separators and a dangling OPENING bracket (e.g.
+    // "Georgia (" left over from "Georgia (49.7%)"), but never a CLOSING
+    // bracket — that would corrupt names like "Miami (OH)".
+    school = school.replace(/[:\-–—([\s]+$/, '').trim();
     school = school.replace(/^[([\s]+/, '').trim();
     if (!school) continue;
     const percent = Number.parseFloat(numMatch[1]);

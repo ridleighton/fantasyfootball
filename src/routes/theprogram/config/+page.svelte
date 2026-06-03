@@ -128,41 +128,30 @@
   // every other known school name (program_schools UNION program_photos
   // UNION program_roll_events.school + committed_school). Position in
   // the list = priority value on save.
+  // The list is exactly the configured schools (data.schoolsForPriority =
+  // program_schools), ordered by saved priority first, then the rest.
   function buildSpInitial() {
-    const known = new Map((data.schoolPriority ?? []).map(r => [r.school_name.toLowerCase(), r.school_name]));
-    const ordered = (data.schoolPriority ?? []).map(r => r.school_name);
-    for (const name of data.schoolsForPriority ?? []) {
-      if (!known.has((name ?? '').toLowerCase())) ordered.push(name);
-    }
-    return ordered.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
+    const dbNames = data.schoolsForPriority ?? [];
+    const dbLower = new Set(dbNames.map(n => (n ?? '').toLowerCase()));
+    const order = (data.schoolPriority ?? [])
+      .map(r => r.school_name)
+      .filter(n => dbLower.has((n ?? '').toLowerCase()));
+    const seen = new Set(order.map(n => n.toLowerCase()));
+    const rest = dbNames.filter(n => !seen.has((n ?? '').toLowerCase()));
+    return [...order, ...rest].map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
   }
   let spItems = $state(buildSpInitial());
   let spMessage = $state('');
   let spSaveTimer = null;
 
-  // Keep the drag list in sync with the school list. Sources, in order of
-  // trust: saved priority order, the union of known schools, and the live
-  // Schools-tab editor (so a school added there shows up immediately).
-  // New schools are appended; removed ones drop; existing order is kept.
+  // Keep the drag list in sync with the configured schools: a school added
+  // (and saved) in Config appears; a removed one drops; order is preserved.
   $effect(() => {
-    const namesByLower = new Map();
-    for (const r of (data.schoolPriority ?? [])) namesByLower.set(r.school_name.toLowerCase(), r.school_name);
-    for (const n of (data.schoolsForPriority ?? [])) {
-      const t = (n ?? '').trim();
-      if (t) namesByLower.set(t.toLowerCase(), t);
-    }
-    for (const s of schools) {
-      const t = (s.name ?? '').trim();
-      if (t) namesByLower.set(t.toLowerCase(), t);
-    }
-
-    const wanted = new Set(namesByLower.keys());
+    const dbNames = (data.schoolsForPriority ?? []).map(n => (n ?? '').trim()).filter(Boolean);
+    const dbLower = new Set(dbNames.map(n => n.toLowerCase()));
     const present = new Set(spItems.map(i => i.name.toLowerCase()));
-    const kept = spItems.filter(i => wanted.has(i.name.toLowerCase()));
-    const additions = [];
-    for (const [lower, name] of namesByLower) {
-      if (!present.has(lower)) additions.push(name);
-    }
+    const kept = spItems.filter(i => dbLower.has(i.name.toLowerCase()));
+    const additions = dbNames.filter(n => !present.has(n.toLowerCase()));
     if (kept.length !== spItems.length || additions.length > 0) {
       const merged = [...kept.map(i => i.name), ...additions];
       spItems = merged.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));

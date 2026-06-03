@@ -35,24 +35,8 @@ export async function load() {
         `SELECT id, school_name, priority FROM program_school_priority
           ORDER BY priority ASC`
       ).catch(() => ({ rows: [] })),
-      // Union of every school name we've ever seen — drives the School
-      // Priority drag list so it works even when program_schools is
-      // empty (older shows ran straight off program_photos + odds strings).
-      db.query(`
-        SELECT DISTINCT school AS name FROM (
-          SELECT name AS school FROM program_schools
-          UNION
-          SELECT school FROM program_photos
-            WHERE school IS NOT NULL AND TRIM(school) <> ''
-          UNION
-          SELECT school FROM program_roll_events
-            WHERE school IS NOT NULL AND TRIM(school) <> ''
-          UNION
-          SELECT committed_school FROM program_roll_events
-            WHERE committed_school IS NOT NULL AND TRIM(committed_school) <> ''
-        ) u
-        ORDER BY school ASC
-      `).catch(() => ({ rows: [] }))
+      // The School Rankings drag list is exactly the configured schools.
+      db.query(`SELECT name FROM program_schools ORDER BY name ASC`).catch(() => ({ rows: [] }))
     ]);
     return {
       conferences: confRes.rows,

@@ -15,7 +15,6 @@
   const TABS = [
     { key: 'roll', label: 'Roll Information' },
     { key: 'players', label: 'Player Priority' },
-    { key: 'schools', label: 'School Priority' },
     { key: 'show', label: 'Show Run' }
   ];
   let activeTab = $state('roll');
@@ -220,61 +219,6 @@
   const missingSchools = $derived(
     (data.schools ?? []).filter(s => !submittedSchools.has(s.toLowerCase())).sort()
   );
-
-  // ---- School Priority (standing drag list, program_school_priority) ----
-  // The list is exactly the configured schools (data.schoolsForPriority =
-  // program_schools), ordered by saved priority first, then the rest.
-  function buildSpInitial() {
-    const dbNames = data.schoolsForPriority ?? [];
-    const dbLower = new Set(dbNames.map(n => (n ?? '').toLowerCase()));
-    const order = (data.schoolPriority ?? [])
-      .map(r => r.school_name)
-      .filter(n => dbLower.has((n ?? '').toLowerCase()));
-    const seen = new Set(order.map(n => n.toLowerCase()));
-    const rest = dbNames.filter(n => !seen.has((n ?? '').toLowerCase()));
-    return [...order, ...rest].map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
-  }
-  let spItems = $state(buildSpInitial());
-  let spMessage = $state('');
-  let spSaveTimer = null;
-
-  // Keep the drag list in sync with the configured schools — a school added
-  // in Config appears, a removed one drops, existing order is preserved.
-  $effect(() => {
-    const dbNames = (data.schoolsForPriority ?? []).map(n => (n ?? '').trim()).filter(Boolean);
-    const dbLower = new Set(dbNames.map(n => n.toLowerCase()));
-    const present = new Set(spItems.map(i => i.name.toLowerCase()));
-    const kept = spItems.filter(i => dbLower.has(i.name.toLowerCase()));
-    const additions = dbNames.filter(n => !present.has(n.toLowerCase()));
-    if (kept.length !== spItems.length || additions.length > 0) {
-      const merged = [...kept.map(i => i.name), ...additions];
-      spItems = merged.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
-    }
-  });
-
-  function handleSpConsider(e) {
-    spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
-  }
-  function handleSpFinalize(e) {
-    spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
-    if (spSaveTimer) clearTimeout(spSaveTimer);
-    spSaveTimer = setTimeout(saveSchoolPriority, 300);
-  }
-  async function saveSchoolPriority() {
-    spMessage = 'Saving…';
-    try {
-      const r = await fetch('/theprogram/config/school-priority', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ordered_schools: spItems.map(i => i.name) })
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.message ?? `HTTP ${r.status}`);
-      spMessage = `Saved ${body.count} school${body.count === 1 ? '' : 's'}.`;
-    } catch (e) {
-      spMessage = `Save failed: ${e.message}`;
-    }
-  }
 
   async function uploadCoachPriorities() {
     if (!cpCsv.trim()) { cpMessage = 'Paste a CSV first.'; return; }
@@ -575,30 +519,6 @@
         </ul>
       </div>
     {/if}
-  </section>
-  {/if}
-
-  {#if activeTab === 'schools'}
-  <section class="sp-section">
-    <header class="cp-head">
-      <h2>School Priority</h2>
-      <p>Drag schools into the order that decides ties when coach lists conflict. Top of the list = priority 1. Saves automatically.</p>
-    </header>
-    <ul
-      class="sp-list"
-      use:dndzone={{ items: spItems, flipDurationMs: 150, dropTargetStyle: {} }}
-      onconsider={handleSpConsider}
-      onfinalize={handleSpFinalize}
-    >
-      {#each spItems as item (item.id)}
-        <li class="sp-item">
-          <span class="sp-pri">{item.position}</span>
-          <span class="sp-name">{item.name}</span>
-          <span class="sp-grip" aria-hidden="true">⋮⋮</span>
-        </li>
-      {/each}
-    </ul>
-    {#if spMessage}<span class="sp-msg">{spMessage}</span>{/if}
   </section>
   {/if}
 
@@ -1144,33 +1064,4 @@
     margin: 0 0 8px;
   }
   .cp-missing ul { margin: 0; padding-left: 18px; color: var(--tp-pewter-deep); }
-
-  /* ---- School Priority drag list ---- */
-  .sp-section { margin-top: 8px; }
-  .sp-msg { font-size: 13px; color: var(--tp-navy-dark); font-style: italic; }
-  .sp-list { list-style: none; margin: 0; padding: 0; max-width: 480px; }
-  .sp-item {
-    display: grid;
-    grid-template-columns: 40px 1fr 24px;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--tp-cream);
-    border: 1px solid var(--tp-pewter);
-    border-radius: 3px;
-    margin-bottom: 6px;
-    font-family: var(--tp-body);
-    color: var(--tp-navy-dark);
-    cursor: grab;
-  }
-  .sp-item:active { cursor: grabbing; }
-  .sp-pri {
-    font-family: var(--tp-display-condensed);
-    font-weight: 700;
-    font-size: 14px;
-    color: var(--tp-navy);
-    letter-spacing: 0.06em;
-  }
-  .sp-name { font-size: 14px; }
-  .sp-grip { color: var(--tp-pewter-deep); font-weight: 700; user-select: none; }
 </style>

@@ -25,7 +25,7 @@ export async function load() {
   const { weekId, weekNumber } = await requireActiveWeek();
   const db = await createClient();
   try {
-    const [rowsRes, confRes, coachRes, schoolsRes, schoolPriRes, allSchoolsRes] = await Promise.all([
+    const [rowsRes, confRes, coachRes, schoolsRes] = await Promise.all([
       db.query(
         `SELECT id, conference, type, player, school, locked, in_original_roll,
                 odds, result, committed_school
@@ -45,13 +45,6 @@ export async function load() {
           ORDER BY school_name, priority`,
         [weekId]
       ).catch(() => ({ rows: [] })),
-      db.query(`SELECT name FROM program_schools ORDER BY name ASC`).catch(() => ({ rows: [] })),
-      // Standing school priority (drag list). Position = priority.
-      db.query(
-        `SELECT id, school_name, priority FROM program_school_priority
-          ORDER BY priority ASC`
-      ).catch(() => ({ rows: [] })),
-      // The School Priority drag list is exactly the configured schools.
       db.query(`SELECT name FROM program_schools ORDER BY name ASC`).catch(() => ({ rows: [] }))
     ]);
 
@@ -68,8 +61,6 @@ export async function load() {
       types: TYPES,
       coachPriorities: coachRes.rows,
       schools: schoolsRes.rows.map(r => r.name),
-      schoolPriority: schoolPriRes.rows,
-      schoolsForPriority: allSchoolsRes.rows.map(r => r.name),
       rosterCounts,
       activeLimit: ACTIVE_LIMIT
     };

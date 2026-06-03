@@ -35,8 +35,12 @@ ALTER TABLE program_roster ADD COLUMN IF NOT EXISTS revoke_reason text;
 CREATE INDEX IF NOT EXISTS program_roster_school_status_ix
   ON program_roster (school_name, status);
 
--- One roster row per roll event (idempotency for auto-population).
-CREATE UNIQUE INDEX IF NOT EXISTS program_roster_roll_event_uq
+-- Roster history is append-only: each show population inserts a NEW row and
+-- a revocation keeps the prior (inactive) row as a trace, so multiple rows
+-- can share one roll_event_id across re-processings. The index is therefore
+-- NOT unique. (Drops the old unique index if it was already created.)
+DROP INDEX IF EXISTS program_roster_roll_event_uq;
+CREATE INDEX IF NOT EXISTS program_roster_roll_event_ix
   ON program_roster (roll_event_id) WHERE roll_event_id IS NOT NULL;
 
 -- Fast active-duplicate checks, case-insensitive, scoped to conference.

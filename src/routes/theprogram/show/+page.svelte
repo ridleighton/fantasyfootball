@@ -742,9 +742,12 @@
     return a;
   }
 
+  let gossipSeq = 0; // request token — only the latest check may apply its result
+
   async function loadGossip(ev) {
     // Clear immediately so the prior event's note can't flash on this one
     // while the new check runs — the panel only appears once it resolves.
+    const seq = ++gossipSeq;
     gossipCards = [];
     if (!ev || ev.kind !== 'commit' || ev.savedResult) return;
     gossipChecking = true;
@@ -755,14 +758,15 @@
         body: JSON.stringify({ eventIndex: ev.globalIndex })
       });
       const body = await res.json().catch(() => ({ schools: [] }));
+      if (seq !== gossipSeq) return; // a newer check superseded this one — ignore
       const cards = body.schools ?? [];
       // Assign each card a base text without repeating until the pool's exhausted.
       const order = shuffledIndices(GOSSIP_POOL.length);
       gossipCards = cards.map((c, i) => ({ ...c, text: gossipFill(GOSSIP_POOL[order[i % order.length]], c) }));
     } catch {
-      gossipCards = [];
+      if (seq === gossipSeq) gossipCards = [];
     } finally {
-      gossipChecking = false;
+      if (seq === gossipSeq) gossipChecking = false;
     }
   }
 
@@ -771,7 +775,7 @@
     const ev = currentEvent;
     gossipDismissed = new Set();
     if (ev && ev.kind === 'commit' && !ev.savedResult) loadGossip(ev);
-    else gossipCards = [];
+    else { gossipSeq++; gossipCards = []; gossipChecking = false; }
   });
 
   const visibleGossip = $derived(gossipCards.filter(c => !gossipDismissed.has(c.school)));

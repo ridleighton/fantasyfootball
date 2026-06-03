@@ -44,30 +44,51 @@ export async function POST({ request }) {
     let valueToSave = result.winner;
     if (!valueToSave && result.outcome === 'steal_failed_locked') valueToSave = 'LOCKED';
 
-    // Roster mutation + outcome write happen in one transaction. A capacity
-    // conflict at insert time rolls everything back and leaves the event
-    // unrolled and re-runnable.
+    // Roster mutation + outcome write happen in one transaction. The roster
+    // step runs inside a SAVEPOINT so it can't break the roll: a CAPACITY_FULL
+    // rolls the whole thing back (event stays unrolled), while any other
+    // roster problem — most importantly the program_roster table not having
+    // been created yet — is rolled back to the savepoint and the roll is
+    // still recorded.
     await db.query('BEGIN');
     try {
-      if (result.winner && ADD_OUTCOMES.has(result.outcome)) {
-        await addPlayerToRoster(db, {
-          schoolName: result.winner,
-          playerName: ev.player,
-          conference: ev.conference,
-          source: 'show',
-          weekId,
-          rollEventId,
-          silentDuplicate: true
-        });
-      } else if (result.outcome === 'steal_succeeded' && result.winner) {
-        await transferPlayer(db, {
-          playerName: ev.player,
-          conference: ev.conference,
-          fromSchool: result.display?.committedSchool ?? null,
-          toSchool: result.winner,
-          weekId,
-          rollEventId
-        });
+      const wantsRoster =
+        (result.winner && ADD_OUTCOMES.has(result.outcome)) ||
+        (result.outcome === 'steal_succeeded' && result.winner);
+
+      if (wantsRoster) {
+        await db.query('SAVEPOINT roster_op');
+        try {
+          if (ADD_OUTCOMES.has(result.outcome)) {
+            await addPlayerToRoster(db, {
+              schoolName: result.winner,
+              playerName: ev.player,
+              conference: ev.conference,
+              source: 'show',
+              weekId,
+              rollEventId,
+              silentDuplicate: true
+            });
+          } else {
+            await transferPlayer(db, {
+              playerName: ev.player,
+              conference: ev.conference,
+              fromSchool: result.display?.committedSchool ?? null,
+              toSchool: result.winner,
+              weekId,
+              rollEventId
+            });
+          }
+        } catch (e) {
+          await db.query('ROLLBACK TO SAVEPOINT roster_op').catch(() => {});
+          if (e instanceof RosterError && e.code === 'CAPACITY_FULL') {
+            // Capacity conflict: do NOT record the roll — leave it re-runnable.
+            await db.query('ROLLBACK').catch(() => {});
+            return json({ capacity_conflict: true, school: result.winner });
+          }
+          // Roster not set up (or other roster issue): skip population, but
+          // still record the roll below.
+        }
       }
 
       if (valueToSave && ids.length > 0) {
@@ -80,9 +101,6 @@ export async function POST({ request }) {
       await db.query('COMMIT');
     } catch (e) {
       await db.query('ROLLBACK').catch(() => {});
-      if (e instanceof RosterError && e.code === 'CAPACITY_FULL') {
-        return json({ capacity_conflict: true, school: result.winner });
-      }
       throw e;
     }
 

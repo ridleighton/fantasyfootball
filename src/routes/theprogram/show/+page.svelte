@@ -1672,22 +1672,29 @@
     margin: 0 0 6px;
   }
   .or-head p { margin: 0 0 16px; color: var(--tp-navy-dark); }
-  .or-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .or-tabs {
+    display: flex; flex-wrap: wrap; gap: 2px;
+    border-bottom: 1px solid var(--tp-pewter);
+    margin-bottom: 18px;
+  }
   .or-tab {
-    padding: 8px 14px;
-    background: var(--tp-cream);
-    border: 1px solid var(--tp-navy);
-    border-radius: 999px;
-    color: var(--tp-navy);
+    padding: 9px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    color: var(--tp-pewter-deep);
     font-family: var(--tp-display-condensed);
     font-weight: 700;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     cursor: pointer;
     display: inline-flex; align-items: center; gap: 6px;
+    transition: color 0.15s, border-color 0.15s;
   }
-  .or-tab.active { background: var(--tp-navy); color: var(--tp-cream); border-color: var(--tp-gold); }
+  .or-tab:hover { color: var(--tp-navy-dark); }
+  .or-tab.active { color: var(--tp-navy); border-bottom-color: var(--tp-gold); }
   .or-lock { font-size: 12px; }
   .or-block { margin-bottom: 22px; }
   .or-block-head {

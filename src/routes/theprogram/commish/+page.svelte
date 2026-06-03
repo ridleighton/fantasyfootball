@@ -804,60 +804,62 @@
     margin: 14px 0 28px;
   }
 
-  /* ---- Subtabs ---- */
+  /* ---- Subtabs (underline tab style) ---- */
   .cv-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 2px;
+    border-bottom: 1px solid var(--tp-pewter);
     margin-bottom: 28px;
   }
   .cv-tab {
-    padding: 9px 18px;
-    background: var(--tp-cream);
-    border: 1px solid var(--tp-navy);
-    border-radius: 999px;
-    color: var(--tp-navy);
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    color: var(--tp-pewter-deep);
     font-family: var(--tp-display-condensed);
     font-weight: 700;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s;
   }
-  .cv-tab:hover { background: rgba(217, 164, 65, 0.18); }
+  .cv-tab:hover { color: var(--tp-navy-dark); }
   .cv-tab.active {
-    background: var(--tp-navy);
-    color: var(--tp-cream);
-    border-color: var(--tp-gold);
+    color: var(--tp-navy);
+    border-bottom-color: var(--tp-gold);
   }
 
-  /* Conference filter subtabs — lighter, square-ish chips */
+  /* Conference filter subtabs — smaller underline tabs */
   .cv-subtabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 2px;
+    border-bottom: 1px solid var(--tp-pewter);
     margin-bottom: 22px;
   }
   .cv-subtab {
-    padding: 5px 12px;
+    padding: 7px 13px;
     background: transparent;
-    border: 1px solid var(--tp-pewter);
-    border-radius: 4px;
-    color: var(--tp-navy-dark);
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    color: var(--tp-pewter-deep);
     font-family: var(--tp-display-condensed);
     font-weight: 700;
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s;
   }
-  .cv-subtab:hover { border-color: var(--tp-navy); }
+  .cv-subtab:hover { color: var(--tp-navy-dark); }
   .cv-subtab.active {
-    background: var(--tp-gold);
-    border-color: var(--tp-gold);
-    color: var(--tp-navy-dark);
+    color: var(--tp-navy);
+    border-bottom-color: var(--tp-gold);
   }
 
   /* Show Run tab */

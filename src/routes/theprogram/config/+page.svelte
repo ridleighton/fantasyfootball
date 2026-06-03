@@ -521,23 +521,28 @@
     margin: 14px 0 24px;
   }
 
-  .cf-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .cf-tabs {
+    display: flex; flex-wrap: wrap; gap: 2px;
+    border-bottom: 1px solid var(--tp-pewter);
+    margin-bottom: 24px;
+  }
   .cf-tab {
-    padding: 9px 16px;
-    background: var(--tp-cream);
-    border: 1px solid var(--tp-navy);
-    border-radius: 999px;
-    color: var(--tp-navy);
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    color: var(--tp-pewter-deep);
     font-family: var(--tp-display-condensed);
     font-weight: 700;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s;
   }
-  .cf-tab:hover { background: rgba(217, 164, 65, 0.18); }
-  .cf-tab.active { background: var(--tp-navy); color: var(--tp-cream); border-color: var(--tp-gold); }
+  .cf-tab:hover { color: var(--tp-navy-dark); }
+  .cf-tab.active { color: var(--tp-navy); border-bottom-color: var(--tp-gold); }
 
   .cf-msg {
     font-size: 12px;

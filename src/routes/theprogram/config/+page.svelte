@@ -140,6 +140,35 @@
   let spMessage = $state('');
   let spSaveTimer = null;
 
+  // Keep the drag list in sync with the school list. Sources, in order of
+  // trust: saved priority order, the union of known schools, and the live
+  // Schools-tab editor (so a school added there shows up immediately).
+  // New schools are appended; removed ones drop; existing order is kept.
+  $effect(() => {
+    const namesByLower = new Map();
+    for (const r of (data.schoolPriority ?? [])) namesByLower.set(r.school_name.toLowerCase(), r.school_name);
+    for (const n of (data.schoolsForPriority ?? [])) {
+      const t = (n ?? '').trim();
+      if (t) namesByLower.set(t.toLowerCase(), t);
+    }
+    for (const s of schools) {
+      const t = (s.name ?? '').trim();
+      if (t) namesByLower.set(t.toLowerCase(), t);
+    }
+
+    const wanted = new Set(namesByLower.keys());
+    const present = new Set(spItems.map(i => i.name.toLowerCase()));
+    const kept = spItems.filter(i => wanted.has(i.name.toLowerCase()));
+    const additions = [];
+    for (const [lower, name] of namesByLower) {
+      if (!present.has(lower)) additions.push(name);
+    }
+    if (kept.length !== spItems.length || additions.length > 0) {
+      const merged = [...kept.map(i => i.name), ...additions];
+      spItems = merged.map((name, i) => ({ id: `s-${i}-${name}`, name, position: i + 1 }));
+    }
+  });
+
   function handleSpConsider(e) {
     spItems = e.detail.items.map((it, i) => ({ ...it, position: i + 1 }));
   }

@@ -709,14 +709,14 @@
 
   // ---------- Gossip Girl over-subscription advisory ----------
   const GOSSIP_POOL = [
-    "Hold up, partner. {School} is in on {X} rolls with only {Seats} seat(s) left, so <b>{Player}</b> is the smarter next move ({Reason}). But you run this room — your call.",
-    "Spotted: {School} is in on {X} rolls with just {Seats} seat(s) to give. Save the next one for <b>{Player}</b> — {Reason}. A little tip, from me to you.",
+    "Hold up, Tristan. {School} is in on {X} rolls with only {Seats} seat(s) left, so <b>{Player}</b> is the smarter next move ({Reason}). But you run this room — your call.",
+    "Tristan: {School} is in on {X} rolls with just {Seats} seat(s) to give. Save the next one for <b>{Player}</b> — {Reason}. A little tip, from me to you.",
     "Psst, Tristan. {School}'s juggling {X} rolls and only {Seats} seat(s) remain. <b>{Player}</b> would look awfully good rolled next ({Reason}). But you already knew that, clever thing.",
-    "Careful with that trigger finger — {School} has {X} rolls in play and {Seats} seat(s) open. <b>{Player}</b> is the move, since {Reason}. I do love a commissioner with a plan.",
+    "Careful with that trigger finger, Tristan — {School} has {X} rolls in play and {Seats} seat(s) open. <b>{Player}</b> is the move, since {Reason}. I do love a commissioner with a plan.",
     "Knock knock — just me. {School} is in on {X} rolls with {Seats} seat(s) left, so maybe <b>{Player}</b> next? {Reason}. No pressure… mostly.",
     "Shhh, just between us? {School} is spread across {X} rolls with only {Seats} seat(s) to spare. <b>{Player}</b> next is the kind of decisive I rather like — {Reason}.",
-    "You didn't hear it from me, but {School}'s in on {X} rolls, {Seats} seat(s) remaining. <b>{Player}</b> next is the power move ({Reason}), and power looks good on you.",
-    "Hate to be that girl, but {School} has {X} rolls and only {Seats} seat(s) left. <b>{Player}</b> deserves the next spotlight ({Reason}). Trust me on this one.",
+    "You didn't hear it from me, Tristan, but {School}'s in on {X} rolls, {Seats} seat(s) remaining. <b>{Player}</b> next is the power move ({Reason}), and power looks good on you.",
+    "Hate to be that girl, Tristan, but {School} has {X} rolls and only {Seats} seat(s) left. <b>{Player}</b> deserves the next spotlight ({Reason}). Trust me on this one.",
     "Before you press anything — and I do enjoy the suspense — {School} has {X} rolls and {Seats} seat(s) left. <b>{Player}</b> deserves the next spotlight ({Reason}). Make me proud."
   ];
 

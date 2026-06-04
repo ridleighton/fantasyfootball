@@ -2284,25 +2284,30 @@
     animation: stampDownCenter 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--stamp-delay, 0s) forwards;
   }
 
-  /* "Now you're interested?" pre-roll tag on late-joiner school cards */
-  /* Spec: "Bruh… now you're interested?" — italic Lora/Georgia in
-     crimson-ink, no dimensional treatment, no card fill. Quiet and
-     dry above the helmet. */
+  /* "Now you're interested?" late-joiner callout — a big angled jab
+     anchored off the card's top-right corner so it breaks clear of the
+     red border instead of hiding behind it. */
   .late-banner {
     position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: -28px;
+    right: -28px;
+    left: auto;
+    transform: rotate(8deg);
+    transform-origin: center;
     background: transparent;
-    color: var(--tp-navy-dark);
+    color: var(--tp-oxblood);
     padding: 0;
-    font-family: var(--tp-body);
+    max-width: 170px;
+    font-family: var(--tp-display-condensed);
     font-style: italic;
-    font-size: 13px;
-    font-weight: 400;
-    letter-spacing: 0;
-    white-space: nowrap;
-    z-index: 4;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    text-align: center;
+    white-space: normal;
+    text-shadow: 0 2px 0 var(--tp-cream), 0 1px 3px rgba(0, 0, 0, 0.25);
+    z-index: 8;
   }
 
   .schools {

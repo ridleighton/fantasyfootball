@@ -47,6 +47,11 @@ export async function POST({ request }) {
     // event complete with a sentinel result so it counts as resolved and
     // reads "recruit not committed — roster full" everywhere.
     if (!valueToSave && result.outcome === 'no_eligible_capacity') valueToSave = 'ROSTER FULL';
+    // Any other winnerless outcome — no school cleared the threshold cut, no
+    // schools in the roll at all, etc. — still resolves the recruit: they
+    // stay uncommitted. Save a sentinel so the roll counts as complete and
+    // the conference can advance rather than stalling on an unrolled event.
+    if (!valueToSave) valueToSave = 'UNCOMMITTED';
 
     // Roster mutation + outcome write happen in one transaction. The roster
     // step runs inside a SAVEPOINT so it can't break the roll: a CAPACITY_FULL

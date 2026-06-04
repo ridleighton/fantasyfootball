@@ -825,6 +825,9 @@
     if (rollOutcome === 'no_eligible_capacity') {
       return `${currentEvent.player} did not commit — every school in this roll is at capacity.`;
     }
+    if (!rollWinner) {
+      return `${currentEvent.player} did not commit. The roll is complete.`;
+    }
     return '';
   });
 
@@ -872,6 +875,26 @@
       && rollState === 'revealed'
       && (rollOutcome === 'steal_failed_stayed' || rollOutcome === 'steal_no_real_attempt');
   }
+  // A winnerless, non-locked, non-capacity reveal — no school cleared the
+  // cut (or there were no schools at all). The recruit stays uncommitted,
+  // but the roll still counts as resolved.
+  function isUncommittedReveal() {
+    return rollState === 'revealed'
+      && currentEvent != null
+      && !rollWinner
+      && rollOutcome !== 'steal_failed_locked'
+      && rollOutcome !== 'no_eligible_capacity'
+      && !isStealStayed();
+  }
+  // Outcome 4 only — a late-joiner (in_original_roll === false) tried to
+  // steal a recruit it never wanted until the commit landed. No real
+  // roll happens: their odds fall to 0, the "Now You're Interested?" tag
+  // appears, and the recruit stays put.
+  function isStealNoRealAttempt() {
+    return currentEvent?.kind === 'steal'
+      && rollState === 'revealed'
+      && rollOutcome === 'steal_no_real_attempt';
+  }
 
   // ---------- Locked reveal: odds animation ----------
   // Locked outcome: every non-committed school's odds drop to 0, and the
@@ -905,7 +928,7 @@
   }
 
   $effect(() => {
-    if (isLockedReveal()) startLockedAnimation();
+    if (isLockedReveal() || isStealNoRealAttempt()) startLockedAnimation();
   });
 
   // ---------- Edit panel ----------
@@ -1237,6 +1260,13 @@
               <span class="stamp-sub">Not Committed</span>
             </div>
           </div>
+        {:else if isUncommittedReveal()}
+          <div class="rect-stamp player-stamp" use:stampIn={{ thudTarget: '.player-wrap' }} aria-label="Uncommitted">
+            <div class="rect-stamp-inner">
+              <span class="stamp-label">Uncommitted</span>
+              <span class="stamp-sub">No Commit This Week</span>
+            </div>
+          </div>
         {/if}
       </div>
     </header>
@@ -1264,9 +1294,10 @@
            stayed-loyal reveal keeps the schools view rendered as-is and
            drives its messaging through the player-name stamp only. -->
       {@const locked = isLockedReveal()}
+      {@const noAttempt = isStealNoRealAttempt()}
       {@const showBars = locked && !s.isCommitted && data.barsImage}
-      {@const dropping = locked}
-      {@const showLateTag = locked && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
+      {@const dropping = locked || noAttempt}
+      {@const showLateTag = (locked || noAttempt) && currentEvent.kind === 'steal' && s.inOriginalRoll === false}
       <div
         class="school-card"
         class:ineligible={s.eligible === false}
@@ -1335,7 +1366,7 @@
          Hidden once we reach the auto-commit solo_done state: the
          post-roll winner card alone carries the result (no double helmet). -->
     {#if !isAcPhase2 && (rollState === 'idle' || isLockedReveal() || isStealStayed() || acPhase === 'megaphone' || acPhase === 'fading')}
-      <div class="schools" class:schools-locked={isLockedReveal()}>
+      <div class="schools" class:schools-locked={isLockedReveal() || isStealNoRealAttempt()}>
         {#each currentEvent.display.schools as s (s.school)}
           {@render schoolCard(s)}
         {/each}
@@ -1350,6 +1381,22 @@
         <div class="steal-message locked">
           <strong>{committedName}</strong> has locked
           <strong>{currentEvent.player}</strong> from being stolen.
+        </div>
+      {:else if isStealNoRealAttempt()}
+        {@const committedName = currentEvent.display.schools.find(s => s.isCommitted)?.school
+          ?? currentEvent.display.committedSchool ?? ''}
+        {@const stealers = currentEvent.display.schools
+          .filter(s => !s.isCommitted && s.inOriginalRoll === false)
+          .map(s => s.school)}
+        {@const stealingTeam = stealers.length
+          ? stealers.join(' and ')
+          : 'That school'}
+        <div class="steal-message no-attempt">
+          Ouch — <strong>{stealingTeam}</strong> only wanted
+          <strong>{currentEvent.player}</strong> once
+          <strong>{committedName}</strong> grabbed them.
+          <strong>{currentEvent.player}</strong> is staying with
+          <strong>{committedName}</strong>.
         </div>
       {:else if isStealStayed()}
         {@const committedName = currentEvent.display.schools.find(s => s.isCommitted)?.school
@@ -1463,7 +1510,10 @@
         </div>
       {:else}
         <div class="reveal-stage">
-          <div class="winner-name">No Result</div>
+          <div class="winner-name uncommitted-name">
+            {rollOutcome === 'no_eligible_capacity' ? 'Not Committed — Roster Full' : 'Not Committed'}
+          </div>
+          <p class="uncommitted-sub">{currentEvent.player} stays uncommitted — this roll is done.</p>
         </div>
       {/if}
     {/if}
@@ -1513,6 +1563,7 @@
           Already rolled · saved result
           <b>{previouslyRolled === 'LOCKED' ? 'Locked'
             : previouslyRolled === 'ROSTER FULL' ? 'Not committed — roster full'
+            : previouslyRolled === 'UNCOMMITTED' ? 'Not committed'
             : previouslyRolled}</b>
         </div>
         <div class="control-row">
@@ -1663,7 +1714,10 @@
           {#if ev.savedResult}
             <div class="recruit-status">
               <span class="check">✓</span>
-              {ev.savedResult === 'LOCKED' ? 'Locked' : ev.savedResult}
+              {ev.savedResult === 'LOCKED' ? 'Locked'
+                : ev.savedResult === 'ROSTER FULL' ? 'Not committed — roster full'
+                : ev.savedResult === 'UNCOMMITTED' ? 'Not committed'
+                : ev.savedResult}
             </div>
           {:else}
             <div class="recruit-status pending">Ready to roll</div>
@@ -2665,6 +2719,19 @@
     font-weight: 700;
     text-shadow: 0 2px 0 var(--tp-navy-dark);
   }
+  /* Uncommitted reveal — no winner; quiet, no gold celebration. */
+  .winner-name.uncommitted-name {
+    color: var(--tp-navy-dark);
+    font-size: clamp(32px, 4.6vw, 52px);
+  }
+  .uncommitted-sub {
+    margin: 12px auto 0;
+    text-align: center;
+    font-family: var(--tp-body);
+    font-style: italic;
+    font-size: clamp(16px, 2vw, 20px);
+    color: var(--tp-navy-dark);
+  }
 
   /* Locked steal — schools view augmented with bars + LOCKED rect-stamp */
   .schools-locked .school-card.committed {
@@ -2700,7 +2767,7 @@
      the crimson card surface; switched to cream-soft (dropping) and
      gold-soft (rising) which pass AA at ~5:1. */
   .pct-big.dropping {
-    color: rgba(244, 236, 221, 0.6);
+    color: #2b2b2b;
     font-variant-numeric: tabular-nums;
   }
   .pct-big.rising {
@@ -2725,9 +2792,10 @@
     animation: steal-message-in 0.4s ease-out both;
   }
   /* Lands ~0.5s after each outcome's stamp settles. */
-  .steal-message.locked  { animation-delay: 1.2s; }
-  .steal-message.stayed  { animation-delay: 2.0s; }
-  .steal-message.stolen  { animation-delay: 1.5s; }
+  .steal-message.locked     { animation-delay: 1.2s; }
+  .steal-message.stayed     { animation-delay: 2.0s; }
+  .steal-message.stolen     { animation-delay: 1.5s; }
+  .steal-message.no-attempt { animation-delay: 2.0s; }
   /* Per-variant accent on the bolded names — black ink for the
      dramatic outcomes (locked / stolen), warm crimson for the loyal
      outcome. Overrides the layout's navy-dark default. */
@@ -2736,7 +2804,8 @@
     color: #111111;
     text-decoration-color: var(--tp-navy);
   }
-  .steal-message.stayed :global(strong) {
+  .steal-message.stayed :global(strong),
+  .steal-message.no-attempt :global(strong) {
     color: var(--tp-oxblood);
     text-decoration-color: var(--tp-gold);
   }

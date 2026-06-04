@@ -480,6 +480,8 @@ export function formatOutcomeLabel(group) {
 
   // Sentinel: no eligible school (all at capacity) → recruit stays uncommitted.
   if (winner === 'ROSTER FULL') return 'Not committed — roster full';
+  // Sentinel: no school cleared the cut (or no schools at all) → uncommitted.
+  if (winner === 'UNCOMMITTED') return 'Not committed';
 
   if (group.type === 'Commit') {
     return `Committed to ${winner}`;
